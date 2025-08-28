@@ -1,0 +1,364 @@
+:root {
+  --bg: #f3f4f6;
+  --surface: #fff;
+  --text: #111827;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --primary: #3b82f6;
+  --radius: 12px;
+  --gap: 16px;
+}
+
+* {
+  box-sizing: border-box
+}
+
+/* --- 추가: 바디를 컬럼 레이아웃으로 만들어 푸터를 바닥에 고정 --- */
+html,
+body {
+  height: 100%;
+}
+
+/* 이미 있으면 유지 */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  display: flex;
+  /* NEW */
+  flex-direction: column;
+  /* NEW */
+  min-height: 100vh;
+  /* NEW */
+}
+
+/* main 영역이 남는 공간을 차지 → footer가 화면 하단에 붙음 */
+.page {
+  padding: 24px;
+  flex: 1;
+  /* NEW */
+}
+
+/* --- footer 정렬/폭 제한 --- */
+.site-footer {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+  padding: 16px 12px;
+}
+
+.site-footer__inner {
+  max-width: 1200px;
+  /* 본문과 같은 폭 */
+  margin: 0 auto;
+  /* 가운데 정렬 */
+  text-align: center;
+  /* 텍스트 중앙 */
+}
+
+
+.page {
+  padding: 24px
+}
+
+.section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px
+}
+
+.logo {
+  margin: 0 0 16px 0;
+  text-align: center;
+  font-size: 28px
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin: 0 auto;
+}
+
+.card--auth {
+  max-width: 520px;
+  width: 100%
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px
+}
+
+.form__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px
+}
+
+.form__label {
+  font-size: 12px;
+  color: var(--muted)
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.input--grow {
+  flex: 1
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn--block {
+  width: 100%
+}
+
+.btn--primary {
+  background: var(--primary);
+  color: #fff
+}
+
+.btn--secondary {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--text)
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--line);
+  height: 32px
+}
+
+.btn:active {
+  transform: translateY(1px)
+}
+
+.row {
+  display: flex;
+  align-items: center
+}
+
+.row--center {
+  justify-content: center
+}
+
+.row--between {
+  justify-content: space-between
+}
+
+.row--gap-sm {
+  gap: 8px
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px
+}
+
+/* Dashboard */
+.section--dashboard {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+}
+
+.sidebar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sidebar__user {
+  margin: 0 0 8px 0;
+  font-size: 18px
+}
+
+.sidebar__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px
+}
+
+.roomlist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px
+}
+
+.roomlist__item {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.roomlist__item.is-active {
+  background: #eef2ff;
+  border-color: #c7d2fe
+}
+
+.chat {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  min-height: 70vh;
+}
+
+.chat__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chat__title {
+  margin: 0;
+  font-size: 20px
+}
+
+.chat__messages {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  min-height: 360px;
+}
+
+.msg {
+  max-width: 560px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  background: #fff
+}
+
+.msg--me {
+  margin-left: auto;
+  background: #e8f0ff;
+  border-color: #dbeafe
+}
+
+.msg__meta {
+  font-size: 11px;
+  color: var(--muted)
+}
+
+.msg__body {
+  font-size: 14px
+}
+
+.chat__composer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .section {
+    padding: 16px
+  }
+
+  .section--dashboard {
+    grid-template-columns: 240px 1fr;
+    gap: 16px
+  }
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 12px
+  }
+
+  .section {
+    padding: 12px
+  }
+
+  .section--dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    order: 2
+  }
+
+  .chat {
+    order: 1;
+    min-height: 60vh
+  }
+
+  .chat__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px
+  }
+
+  .roomlist__item {
+    height: 36px
+  }
+}
+
+@media (max-width: 480px) {
+  .card--auth {
+    padding: 16px
+  }
+
+  .btn {
+    height: 36px
+  }
+
+  .btn--ghost {
+    height: 28px
+  }
+
+  .chat__composer {
+    flex-direction: column;
+    align-items: stretch
+  }
+
+  .input--grow {
+    width: 100%
+  }
+}

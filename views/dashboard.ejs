@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<%- include('include/header', { title: "Dashboard" }) %>
+
+  <body>
+    <main class="page">
+      <section class="section section--dashboard">
+        <aside class="sidebar">
+          <div class="sidebar__header">
+            <h2 class="sidebar__user">
+              <%= user && user.name ? user.name : "User" %>
+            </h2>
+            <div class="sidebar__actions">
+              <a class="btn btn--secondary btn--block" href="/chats/new">＋ New chat</a>
+              <a class="btn btn--secondary btn--block" href="/groups/new">＋ New group</a>
+            </div>
+          </div>
+
+          <nav class="roomlist">
+            <% (rooms || []).forEach(function(r){ %>
+              <a class="roomlist__item <%= r.name === currentRoom ? 'is-active' : '' %>"
+                href="/rooms/<%= encodeURIComponent(r.name.replace('# ', '').toLowerCase()) %>">
+                <%= r.name %>
+              </a>
+              <% }) %>
+          </nav>
+        </aside>
+
+        <section class="chat">
+          <header class="chat__header">
+            <h3 class="chat__title">
+              <%= currentRoom %>
+            </h3>
+            <div class="row row--gap-sm">
+              <a class="btn btn--secondary" href="/notifications">Notifications</a>
+              <a class="btn btn--secondary" href="/invite">Invite</a>
+              <a class="btn btn--secondary" href="/settings">Settings</a>
+            </div>
+          </header>
+
+          <div class="chat__messages" id="messages">
+            <% (messages || []).forEach(function(m){ %>
+              <article class="msg <%= m.from === (user && user.name) ? 'msg--me' : '' %>">
+                <div class="msg__meta">
+                  <%= m.from %> · <%= m.time %>
+                </div>
+                <div class="msg__body">
+                  <%= m.text %>
+                </div>
+              </article>
+              <% }) %>
+          </div>
+
+          <form class="chat__composer" action="/messages" meth

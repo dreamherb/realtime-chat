@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<%- include('include/header', { title: "Login" }) %>
+
+  <body>
+    <main class="page">
+      <section class="section">
+        <h1 class="logo">Realtime Chat</h1>
+
+        <div class="card card--auth">
+          <form class="form" action="/auth/login" method="post">
+            <div class="form__group">
+              <label for="email" class="form__label">Email</label>
+              <input id="email" name="email" type="email" required placeholder="you@example.com" class="input">
+            </div>
+
+            <div class="form__group">
+              <label for="password" class="form__label">Password</label>
+              <input id="password" name="password" type="password" required placeholder="••••••••" class="input">
+            </div>
+
+            <button class="btn btn--primary btn--block" type="submit">Continue</button>
+            <a class="btn btn--secondary btn--block" href="/auth/google">Sign in with Google</a>
+
+            <div class="row row--between row--gap-sm">
+              <a class="btn btn--ghost" href="/auth/signup">Create account</a>
+              <a class="btn btn--ghost" href="/auth/forgot">Forgot password?</a>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+    <%- include('include/footer') %>
+  </body>
+
+</html>

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<%- include('include/header', { title: "Sign Up" }) %>
+
+  <body>
+    <main class="page">
+      <section class="section">
+        <h1 class="logo">Create your account</h1>
+
+        <div class="card card--auth">
+          <form class="form" action="/auth/signup" method="post">
+            <div class="form__group">
+              <label for="name" class="form__label">Name</label>
+              <input id="name" name="name" type="text" required placeholder="Hoon" class="input">
+            </div>
+
+            <div class="form__group">
+              <label for="email" class="form__label">Email</label>
+              <input id="email" name="email" type="email" required placeholder="you@example.com" class="input">
+            </div>
+
+            <div class="form__group">
+              <label for="password" class="form__label">Password</label>
+              <input id="password" name="password" type="password" minlength="8" required
+                placeholder="At least 8 characters" class="input">
+            </div>
+
+            <div class="form__group">
+              <label for="password2" class="form__label">Confirm password</label>
+              <input id="password2" name="password2" type="password" required placeholder="Re-enter password"
+                class="input">
+            </div>
+
+            <div class="row row--center row--gap-sm form__group">
+              <input id="terms" type="checkbox" required class="checkbox">
+              <label for="terms" class="muted">I agree to the Terms and Privacy Policy</label>
+            </div>
+
+            <button class="btn btn--primary btn--block" type="submit">Create account</button>
+            <a class="btn btn--secondary btn--block" href="/auth/google">Sign up with Google</a>
+
+            <div class="row row--center row--gap-sm">
+              <span class="muted">Already have an account?</span>
+              <a class="btn btn--ghost" href="/auth/login">Log in</a>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+    <%- include('include/footer') %>
+  </body>
+
+</html>
