@@ -13,7 +13,7 @@ const indexRouter = require("./router/index");
 const app = express();
 
 app.engine("ejs", engine.__express);
-app.set("views", path.join(__dirname, "./views"));
+app.set("views", path.join(__dirname, "./views")); 
 app.set("view engine", "ejs");
 
 if (process.env.NODE_ENV === "development") {
@@ -33,6 +33,7 @@ const cspOptions = {
             "data:",
             "*.google.com",
             "'unsafe-inline'",
+            "*.googleapis.com"
         ],
         "img-src": ["'self'", "data:", "*.amazonaws.com"],
         "frame-src": ["'self'", "*.youtube.com"],
