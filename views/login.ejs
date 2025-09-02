@@ -1,6 +1,6 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
-<%- include('include/header', { title: "Login" }) %>
+  <%- include('include/header', { title: "Login" }) %>
 
   <body>
     <main class="page">
@@ -11,16 +11,38 @@
           <form class="form" action="/auth/login" method="post">
             <div class="form__group">
               <label for="email" class="form__label">Email</label>
-              <input id="email" name="email" type="email" required placeholder="you@example.com" class="input">
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                placeholder="you@example.com"
+                class="input"
+              />
             </div>
 
             <div class="form__group">
               <label for="password" class="form__label">Password</label>
-              <input id="password" name="password" type="password" required placeholder="••••••••" class="input">
+              <input
+                id="password"
+                name="password"
+                type="password"
+                required
+                placeholder="••••••••"
+                class="input"
+              />
             </div>
 
-            <button id="signInBtn" class="btn btn--primary btn--block" type="button">Continue</button>
-            <a class="btn btn--secondary btn--block" href="/auth/google">Sign in with Google</a>
+            <button
+              id="signInBtn"
+              class="btn btn--primary btn--block"
+              type="button"
+            >
+              Continue
+            </button>
+            <a class="btn btn--secondary btn--block" href="/auth/google"
+              >Sign in with Google</a
+            >
 
             <div class="row row--between row--gap-sm">
               <a class="btn btn--ghost" href="/auth/signup">Create account</a>
@@ -31,7 +53,14 @@
       </section>
     </main>
     <%- include('include/footer') %>
+    <div class="modal-overlay" id="alertModalOverlay">
+      <div class="modal" id="alertModal">
+        <h2>Notice</h2>
+        <p id="alertModalMsg"></p>
+        <button onclick="closeModal()">확인</button>
+      </div>
+    </div>
   </body>
+  <script src="/js/common.js"></script>
   <script src="/js/login.js"></script>
-
 </html>
