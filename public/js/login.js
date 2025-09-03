@@ -33,8 +33,6 @@ function signIn() {
   if (isTextEmpty(pwd)) {
     return showModal("비밀번호를 입력해주세요.");
   }
-
-  console.log("모든 검증을 통과했다! 서버로 API 요청을 보내자.");
 }
 
 signInBtn.addEventListener("click", signIn);
