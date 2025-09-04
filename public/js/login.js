@@ -33,6 +33,8 @@ function signIn() {
   if (isTextEmpty(pwd)) {
     return showModal("비밀번호를 입력해주세요.");
   }
+
+  // 로그인 성공 시 ajax로 로그인 로직 호출
 }
 
 signInBtn.addEventListener("click", signIn);
