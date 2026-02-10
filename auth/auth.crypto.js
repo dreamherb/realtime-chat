@@ -6,9 +6,8 @@ const EMAIL_ALGO = "aes-256-gcm";
 const EMAIL_KEY_HEX = process.env.EMAIL_ENC_KEY; // 32바이트(64 hex) 키 권장
 
 if (!EMAIL_KEY_HEX || Buffer.from(EMAIL_KEY_HEX, "hex").length !== 32) {
-  // 개발 단계에서 키 미설정 시 빠르게 원인 파악할 수 있도록 에러 출력
   console.warn(
-    "[crypto util] EMAIL_ENC_KEY 환경 변수가 없거나 32바이트가 아닙니다. 이메일 암호화가 동작하지 않을 수 있습니다."
+    "[auth.crypto] EMAIL_ENC_KEY 환경 변수가 없거나 32바이트가 아닙니다. 이메일 암호화가 동작하지 않을 수 있습니다."
   );
 }
 

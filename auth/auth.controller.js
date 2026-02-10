@@ -1,37 +1,32 @@
-const express = require("express");
-const router = express.Router();
 const {
   encryptEmail,
   hashPassword,
-} = require("../utils/crypto");
+} = require("./auth.crypto");
 
-router.get("/login", async function (req, res, next) {
+// GET /auth/login
+async function getLogin(req, res, next) {
   try {
     return res.render("login");
   } catch (error) {
-    console.error("ERROR IN / GET METHOD : ", error);
-
+    console.error("ERROR IN GET /auth/login : ", error);
     res.status(500).send("An error occurred while getting /auth/login");
     return res.render("error");
   }
-});
+}
 
-router.get("/signup", async function (req, res, next) {
+// GET /auth/signup
+async function getSignup(req, res, next) {
   try {
     return res.render("signup");
   } catch (error) {
-    console.error("ERROR IN / GET METHOD : ", error);
-
+    console.error("ERROR IN GET /auth/signup : ", error);
     res.status(500).send("An error occurred while getting /auth/signup");
     return res.render("error");
   }
-});
+}
 
-/**
- * POST /auth/login
- * 로그인 API
- */
-router.post("/login", async function (req, res, next) {
+// POST /auth/login
+async function postLogin(req, res, next) {
   try {
     const { email, password } = req.body;
 
@@ -43,11 +38,7 @@ router.post("/login", async function (req, res, next) {
     }
 
     // TODO: DB에서 사용자 조회 후 비밀번호 검증
-    // const user = await findUserByEmail(email);
-    // if (!user || !await verifyPassword(password, user.password)) { ... }
 
-    // DB 미구현이므로 요청만 유효하면 성공으로 처리
-    // 추후 세션/토큰 발급 로직 추가
     return res.status(200).json({
       success: true,
       message: "로그인되었습니다.",
@@ -60,15 +51,12 @@ router.post("/login", async function (req, res, next) {
       message: "로그인 처리 중 오류가 발생했습니다.",
     });
   }
-});
+}
 
-/**
- * POST /auth/signup
- * 회원가입 API
- * - 이메일: 복호화 가능한 양방향 암호화
- * - 비밀번호: bcrypt 단방향 해시
- */
-router.post("/signup", async function (req, res, next) {
+// POST /auth/signup
+// - 이메일: 복호화 가능한 양방향 암호화
+// - 비밀번호: bcrypt 단방향 해시
+async function postSignup(req, res, next) {
   try {
     const { nickname, email, password, confirmPassword } = req.body || {};
 
@@ -90,12 +78,7 @@ router.post("/signup", async function (req, res, next) {
     const passwordHash = await hashPassword(password);
 
     // TODO: DB에 사용자 정보 저장
-    // 예시:
-    // await User.create({
-    //   nickname,
-    //   email: encryptedEmail,
-    //   password: passwordHash,
-    // });
+    // await User.create({ nickname, email: encryptedEmail, password: passwordHash });
 
     console.log("[signup] encryptedEmail:", encryptedEmail);
     console.log("[signup] passwordHash:", passwordHash);
@@ -112,6 +95,12 @@ router.post("/signup", async function (req, res, next) {
       message: "회원가입 처리 중 오류가 발생했습니다.",
     });
   }
-});
+}
 
-module.exports = router;
+module.exports = {
+  getLogin,
+  getSignup,
+  postLogin,
+  postSignup,
+};
+
