@@ -14,26 +14,4 @@ router.get("/", async function (req, res, next) {
   }
 });
 
-router.get("/auth/login", async function (req, res, next) {
-  try {
-    return res.render("login");
-  } catch (error) {
-    console.error("ERROR IN / GET METHOD : ", error);
-
-    res.status(500).send("An error occurred while getting /auth/login");
-    return res.render("error");
-  }
-});
-
-router.get("/auth/signup", async function (req, res, next) {
-  try {
-    return res.render("signup");
-  } catch (error) {
-    console.error("ERROR IN / GET METHOD : ", error);
-
-    res.status(500).send("An error occurred while getting /auth/signup");
-    return res.render("error");
-  }
-});
-
 module.exports = router;
