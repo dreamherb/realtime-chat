@@ -416,3 +416,57 @@ body {
     .agreements{margin-top:14px}
     .agree-item{display:flex;align-items:flex-start;gap:10px;margin:10px 0;font-size:14px}
     .agree-item input{margin-top:2px}
+
+    .linklike{cursor:pointer;text-decoration:underline}
+
+    /* signup 약관/개인정보 모달 */
+    .policy-modal{
+      position: fixed;
+      inset: 0;
+      display: none; /* 기본 숨김 */
+      z-index: 1200;
+    }
+    .policy-modal.is-open{display:block}
+    .policy-modal__overlay{
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+    }
+    .policy-modal__card{
+      position: relative;
+      background: #fff;
+      border-radius: 12px;
+      width: min(720px, calc(100% - 32px));
+      max-height: calc(100% - 64px);
+      margin: 32px auto;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .policy-modal .modal-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .policy-modal .modal-title{
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .policy-modal .close{
+      background: transparent;
+      border: 0;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
+    .policy-modal .modal-body{
+      padding: 16px;
+      overflow: auto;
+      text-align: left;
+      white-space: pre-wrap;
+    }
+    body.modal-open{overflow:hidden}

@@ -1,5 +1,48 @@
 const createAccountBtn = document.getElementById("createAccountBtn");
 
+function openPolicyModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closePolicyModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  modal.classList.remove("is-open");
+  modal.setAttribute("aria-hidden", "true");
+  if (document.querySelectorAll(".policy-modal.is-open").length === 0) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+// 약관/개인정보 모달 오픈/클로즈 (data-open / data-close 기반)
+document.addEventListener("click", function (e) {
+  const openTarget = e.target.closest("[data-open]");
+  if (openTarget) {
+    e.preventDefault();
+    e.stopPropagation();
+    openPolicyModal(openTarget.dataset.open);
+    return;
+  }
+
+  const closeTarget = e.target.closest("[data-close]");
+  if (closeTarget) {
+    e.preventDefault();
+    e.stopPropagation();
+    closePolicyModal(closeTarget.dataset.close);
+  }
+});
+
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Escape") return;
+  document.querySelectorAll(".policy-modal.is-open").forEach((el) => {
+    closePolicyModal(el.id);
+  });
+});
+
 function signUp() {
   const isEmailValid = checkEmailValid();
   if (!isEmailValid) {
@@ -21,7 +64,7 @@ function signUp() {
   }
   if (isValidPassword(pwd)) {
     return showAlertModal(
-      "비밀 번호는 공백없이 영문, 숫자, 특수문자가 조합된 8 - 15자리여야 합니다."
+      "비밀 번호는 공백없이 영문, 숫자, 특수문자가 조합된 8 - 15자리여야 합니다.",
     );
   }
   if (pwd !== confirmPassword) {
@@ -45,7 +88,9 @@ function signUp() {
       if (data.redirectUrl) {
         window.location.href = data.redirectUrl;
       } else {
-        showAlertModal("회원가입이 완료되었습니다. 로그인 페이지로 이동해주세요.");
+        showAlertModal(
+          "회원가입이 완료되었습니다. 로그인 페이지로 이동해주세요.",
+        );
       }
     },
     error: function (xhr) {
