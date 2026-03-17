@@ -71,6 +71,12 @@ function signUp() {
     return showAlertModal("입력한 비밀번호가 일치하지 않습니다.");
   }
 
+  const isTosChecked = document.getElementById("tos")?.checked;
+  const isPrivacyChecked = document.getElementById("privacy")?.checked;
+  if (!isTosChecked || !isPrivacyChecked) {
+    return showAlertModal("약관을 모두 체크해주세요.");
+  }
+
   $.ajax({
     url: "/auth/signup",
     type: "POST",
