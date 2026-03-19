@@ -1,17 +1,4 @@
-const mysql = require("mysql2/promise");
-
-const dbConfig = {
-  host: process.env.MYSQL_HOST,
-  port: parseInt(process.env.MYSQL_PORT, 10),
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-};
-
-const pool = mysql.createPool(dbConfig);
+const { pool } = require("./database.client");
 
 async function checkDbConnection() {
   let connection;
@@ -30,6 +17,6 @@ async function checkDbConnection() {
 }
 
 module.exports = {
-  pool,
   checkDbConnection,
 };
+

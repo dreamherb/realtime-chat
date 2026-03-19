@@ -1,4 +1,4 @@
-const { pool } = require("../db");
+const { pool } = require("../infrastructure/database");
 
 /**
  * 회원 생성
