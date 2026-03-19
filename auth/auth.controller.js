@@ -1,12 +1,16 @@
-const {
-  encryptEmail,
-  hashPassword,
-} = require("./auth.crypto");
+const jwt = require("jsonwebtoken");
+const { encryptEmail, hashPassword, verifyPassword } = require("./auth.crypto");
+const authService = require("./auth.service");
 
 // GET /auth/login
 async function getLogin(req, res, next) {
   try {
-    return res.render("login");
+    const user = req.user;
+    if (user) {
+      return res.redirect("/dashboard");
+    } else {
+      return res.render("login");
+    }
   } catch (error) {
     console.error("ERROR IN GET /auth/login : ", error);
     res.status(500).send("An error occurred while getting /auth/login");
@@ -37,11 +41,57 @@ async function postLogin(req, res, next) {
       });
     }
 
-    // TODO: DB에서 사용자 조회 후 비밀번호 검증
+    const encryptedEmail = encryptEmail(email);
+    const user = await authService.findUserByEmail(encryptedEmail);
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "이메일 또는 비밀번호가 일치하지 않습니다.",
+      });
+    }
+
+    const isPasswordValid = await verifyPassword(password, user.password);
+
+    if (!isPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        message: "이메일 또는 비밀번호가 일치하지 않습니다.",
+      });
+    }
+
+    // 로그인에 성공한 후 JWT 발급
+    const jwtSecret = process.env.JWT_ACCESS_SECRET;
+    if (!jwtSecret) {
+      return res.status(500).json({
+        success: false,
+        message: "JWT 설정이 누락되었습니다.",
+      });
+    }
+
+    const accessToken = jwt.sign(
+      {
+        email: encryptedEmail,
+      },
+      jwtSecret,
+      {
+        expiresIn: "1h",
+        issuer: "realtime-chat",
+      },
+    );
+
+    res.cookie("usi", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 1000,
+      path: "/",
+    });
 
     return res.status(200).json({
       success: true,
       message: "로그인되었습니다.",
+      accessToken,
       redirectUrl: "/dashboard",
     });
   } catch (error) {
@@ -77,8 +127,11 @@ async function postSignup(req, res, next) {
     const encryptedEmail = encryptEmail(email);
     const passwordHash = await hashPassword(password);
 
-    // TODO: DB에 사용자 정보 저장
-    // await User.create({ nickname, email: encryptedEmail, password: passwordHash });
+    await authService.createUser({
+      nickname,
+      encryptedEmail,
+      passwordHash,
+    });
 
     console.log("[signup] encryptedEmail:", encryptedEmail);
     console.log("[signup] passwordHash:", passwordHash);
@@ -103,4 +156,3 @@ module.exports = {
   postLogin,
   postSignup,
 };
-

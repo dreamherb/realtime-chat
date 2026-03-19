@@ -140,6 +140,13 @@
     </div>
   </div>
     <%- include('include/footer') %>
+    <div class="modal-overlay" id="alertModalOverlay">
+      <div class="modal" id="alertModal">
+        <h2>Notice</h2>
+        <p id="alertModalMsg"></p>
+        <button onclick="closeAlertModal()">확인</button>
+      </div>
+    </div>
   </body>
   <script src="/js/jquery-3.7.1.min.js"></script>
   <script src="/js/common.js"></script>

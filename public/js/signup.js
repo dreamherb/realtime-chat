@@ -44,11 +44,6 @@ document.addEventListener("keydown", function (e) {
 });
 
 function signUp() {
-  const isEmailValid = checkEmailValid();
-  if (!isEmailValid) {
-    return showAlertModal("올바른 이메일 형식을 입력해주세요.");
-  }
-
   const nickname = document.getElementById("nickname").value.trim();
   const email = document.getElementById("email").value.trim();
   const pwd = document.getElementById("password").value.trim();
@@ -59,6 +54,12 @@ function signUp() {
   if (isTextEmpty(nickname)) {
     return showAlertModal("닉네임을 입력해주세요.");
   }
+
+  const isEmailValid = checkEmailValid();
+  if (!isEmailValid) {
+    return showAlertModal("올바른 이메일 형식을 입력해주세요.");
+  }
+
   if (isTextEmpty(pwd)) {
     return showAlertModal("비밀번호를 입력해주세요.");
   }
