@@ -51,4 +51,19 @@
               <% }) %>
           </div>
 
-          <form class="chat__composer" action="/messages" meth
+          <form class="chat__composer" action="/messages" method="post">
+            <input
+              class="input input--grow"
+              type="text"
+              name="text"
+              placeholder="메시지를 입력하세요"
+              autocomplete="off"
+            />
+            <button class="btn btn--primary" type="submit">Send</button>
+          </form>
+        </section>
+      </section>
+    </main>
+    <%- include('include/footer') %>
+  </body>
+</html>

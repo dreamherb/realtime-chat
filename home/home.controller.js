@@ -1,8 +1,19 @@
+const { getUsiToken, verifyUsiToken } = require("../auth/auth.middleware");
+
 const homeController = {
   // GET /
   async getRoot(req, res, next) {
     try {
-      // 로그인 처리 안되어있으면 login 페이지로 보내기 기능 필요
+      const token = getUsiToken(req);
+      if (token) {
+        try {
+          verifyUsiToken(token);
+          return res.redirect("/dashboard");
+        } catch {
+          res.clearCookie("usi", { path: "/" });
+        }
+      }
+
       return res.render("login");
     } catch (error) {
       console.error("ERROR IN GET / : ", error.stack);

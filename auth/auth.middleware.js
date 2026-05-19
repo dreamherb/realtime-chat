@@ -1,8 +1,40 @@
 const jwt = require("jsonwebtoken");
 
+const SESSION_COOKIE = "usi";
+
+function getUsiToken(req) {
+  return req.cookies?.[SESSION_COOKIE] || null;
+}
+
+function verifyUsiToken(token) {
+  const jwtSecret = process.env.JWT_ACCESS_SECRET;
+  if (!jwtSecret) {
+    throw new Error("JWT_ACCESS_SECRET is not configured");
+  }
+  return jwt.verify(token, jwtSecret);
+}
+
+/**
+ * 로그인 세션(usi 쿠키)이 없거나 만료되면 루트(로그인)로 리다이렉트
+ */
+function requireUsiForPage(req, res, next) {
+  try {
+    const token = getUsiToken(req);
+    if (!token) {
+      return res.redirect("/");
+    }
+
+    req.user = verifyUsiToken(token);
+    return next();
+  } catch {
+    res.clearCookie(SESSION_COOKIE, { path: "/" });
+    return res.redirect("/");
+  }
+}
+
 function requireAuth(req, res, next) {
   try {
-    const cookieToken = req.cookies?.accessToken;
+    const cookieToken = getUsiToken(req) || req.cookies?.accessToken;
     const authHeader = req.headers?.authorization || "";
     const bearerToken = authHeader.startsWith("Bearer ")
       ? authHeader.slice(7)
@@ -36,5 +68,9 @@ function requireAuth(req, res, next) {
 }
 
 module.exports = {
+  SESSION_COOKIE,
+  getUsiToken,
+  verifyUsiToken,
+  requireUsiForPage,
   requireAuth,
 };
