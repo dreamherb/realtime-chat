@@ -34,7 +34,21 @@ async function findUserByEmail(encryptedEmail) {
   }
 }
 
+async function findUserById(userId) {
+  const sql = "SELECT * FROM users WHERE id = ?";
+  const params = [userId];
+
+  try {
+    const [rows] = await pool.query(sql, params);
+    return rows[0] || null;
+  } catch (error) {
+    console.error("ERROR IN FIND USER BY ID : ", error.stack);
+    throw error;
+  }
+}
+
 module.exports = {
   createUser,
   findUserByEmail,
+  findUserById,
 };

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <%- include('include/header', { title: "New chat" }) %>
+
+  <body>
+    <main class="page">
+      <section class="section">
+        <h1 class="logo">1:1 채팅 시작</h1>
+
+        <div class="card card--auth">
+          <p class="muted" style="margin-bottom: 1rem">
+            상대방의 가입 이메일로 DM 채팅방을 만듭니다.
+          </p>
+
+          <form class="form" id="newChatForm">
+            <div class="form__group">
+              <label for="targetEmail" class="form__label">상대방 이메일</label>
+              <input
+                id="targetEmail"
+                name="targetEmail"
+                type="email"
+                required
+                placeholder="friend@example.com"
+                class="input"
+              />
+            </div>
+
+            <div class="row row--gap-sm" style="margin-top: 1rem">
+              <button type="button" class="btn btn--primary" id="createChatBtn">
+                채팅방 만들기
+              </button>
+              <a class="btn btn--secondary" href="/dashboard">취소</a>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <%- include('include/footer') %>
+    <div class="modal-overlay" id="alertModalOverlay">
+      <div class="modal" id="alertModal">
+        <h2>Notice</h2>
+        <p id="alertModalMsg"></p>
+        <button onclick="closeAlertModal()">확인</button>
+      </div>
+    </div>
+  </body>
+  <script src="/js/common.js"></script>
+  <script src="/js/chats-new.js"></script>
+</html>

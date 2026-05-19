@@ -17,12 +17,15 @@
           </div>
 
           <nav class="roomlist">
+            <% if (!(rooms || []).length) { %>
+              <p class="muted roomlist__empty">참여 중인 채팅방이 없습니다.</p>
+            <% } %>
             <% (rooms || []).forEach(function(r){ %>
-              <a class="roomlist__item <%= r.name === currentRoom ? 'is-active' : '' %>"
-                href="/rooms/<%= encodeURIComponent(r.name.replace('# ', '').toLowerCase()) %>">
-                <%= r.name %>
+              <a class="roomlist__item <%= selectedRoomId == r.id ? 'is-active' : '' %>"
+                href="/dashboard?roomId=<%= r.id %>">
+                <%= r.type === 'DM' ? '' : '# ' %><%= r.name %>
               </a>
-              <% }) %>
+            <% }) %>
           </nav>
         </aside>
 
@@ -39,6 +42,12 @@
           </header>
 
           <div class="chat__messages" id="messages">
+            <% if (selectedRoomId && !(messages || []).length) { %>
+              <p class="muted">아직 메시지가 없습니다.</p>
+            <% } %>
+            <% if (!selectedRoomId) { %>
+              <p class="muted">왼쪽에서 채팅방을 선택하거나 새 채팅을 만드세요.</p>
+            <% } %>
             <% (messages || []).forEach(function(m){ %>
               <article class="msg <%= m.from === (user && user.name) ? 'msg--me' : '' %>">
                 <div class="msg__meta">
@@ -48,19 +57,26 @@
                   <%= m.text %>
                 </div>
               </article>
-              <% }) %>
+            <% }) %>
           </div>
 
-          <form class="chat__composer" action="/messages" method="post">
+          <% if (selectedRoomId) { %>
+          <form class="chat__composer" id="messageForm" data-room-id="<%= selectedRoomId %>">
             <input
               class="input input--grow"
               type="text"
               name="text"
+              id="messageText"
               placeholder="메시지를 입력하세요"
               autocomplete="off"
+              disabled
             />
-            <button class="btn btn--primary" type="submit">Send</button>
+            <button class="btn btn--primary" type="submit" disabled>Send</button>
           </form>
+          <p class="muted" style="padding: 0 16px 16px; font-size: 12px;">
+            메시지 전송은 다음 단계에서 구현됩니다.
+          </p>
+          <% } %>
         </section>
       </section>
     </main>

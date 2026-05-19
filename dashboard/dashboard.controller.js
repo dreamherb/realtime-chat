@@ -1,14 +1,19 @@
+const { resolveSessionUser } = require("../auth/auth.session");
 const dashboardService = require("./dashboard.service");
 
 const dashboardController = {
   async getDashboard(req, res, next) {
     try {
-      const encryptedEmail = req.user?.email;
-      if (!encryptedEmail) {
+      const sessionUser = await resolveSessionUser(req);
+      if (!sessionUser) {
+        res.clearCookie("usi", { path: "/" });
         return res.redirect("/");
       }
 
-      const viewData = await dashboardService.getDashboardViewData(encryptedEmail);
+      const viewData = await dashboardService.getDashboardViewData(
+        sessionUser.id,
+        req.query.roomId,
+      );
 
       if (!viewData) {
         res.clearCookie("usi", { path: "/" });

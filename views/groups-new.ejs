@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <%- include('include/header', { title: "New group" }) %>
+
+  <body>
+    <main class="page">
+      <section class="section">
+        <h1 class="logo">그룹 채팅 만들기</h1>
+
+        <div class="card card--auth">
+          <form class="form" id="newGroupForm">
+            <div class="form__group">
+              <label for="groupName" class="form__label">그룹 이름</label>
+              <input
+                id="groupName"
+                name="groupName"
+                type="text"
+                required
+                maxlength="100"
+                placeholder="팀 채팅"
+                class="input"
+              />
+            </div>
+
+            <div class="row row--gap-sm" style="margin-top: 1rem">
+              <button type="button" class="btn btn--primary" id="createGroupBtn">
+                그룹 만들기
+              </button>
+              <a class="btn btn--secondary" href="/dashboard">취소</a>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <%- include('include/footer') %>
+    <div class="modal-overlay" id="alertModalOverlay">
+      <div class="modal" id="alertModal">
+        <h2>Notice</h2>
+        <p id="alertModalMsg"></p>
+        <button onclick="closeAlertModal()">확인</button>
+      </div>
+    </div>
+  </body>
+  <script src="/js/common.js"></script>
+  <script src="/js/groups-new.js"></script>
+</html>

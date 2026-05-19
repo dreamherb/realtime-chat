@@ -1,25 +1,40 @@
 const authService = require("../auth/auth.service");
+const chatService = require("../chat/chat.service");
 
-/**
- * 대시보드 렌더링용 데이터
- * - users: nickname → view의 user.name
- * - rooms/messages: 채팅 테이블 도입 전까지 빈 배열
- */
-async function getDashboardViewData(encryptedEmail) {
-  const dbUser = await authService.findUserByEmail(encryptedEmail);
+async function getDashboardViewData(userId, roomId) {
+  const dbUser = await authService.findUserById(userId);
 
   if (!dbUser) {
     return null;
   }
 
+  const rooms = await chatService.listRoomsForUser(userId);
+  let messages = [];
+  let currentRoom = "채팅방을 선택해 주세요";
+  let selectedRoomId = null;
+
+  if (roomId) {
+    const numericRoomId = Number(roomId);
+    const isMember = await chatService.isRoomMember(numericRoomId, userId);
+
+    if (isMember) {
+      selectedRoomId = numericRoomId;
+      messages = await chatService.getMessagesForRoom(numericRoomId, userId);
+      currentRoom =
+        (await chatService.getRoomDisplayName(numericRoomId, userId)) ||
+        "채팅방";
+    }
+  }
+
   return {
     user: {
-      // id: dbUser.id,
+      id: dbUser.id,
       name: dbUser.nickname,
     },
-    rooms: [],
-    messages: [],
-    currentRoom: "채팅방을 선택해 주세요",
+    rooms,
+    messages,
+    currentRoom,
+    selectedRoomId,
   };
 }
 

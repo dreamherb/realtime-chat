@@ -71,7 +71,9 @@ async function postLogin(req, res, next) {
 
     const accessToken = jwt.sign(
       {
+        id: user.id,
         email: encryptedEmail,
+        nickname: user.nickname,
       },
       jwtSecret,
       {

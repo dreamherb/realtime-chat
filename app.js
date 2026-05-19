@@ -11,6 +11,7 @@ const bodyParser = require("body-parser");
 const homeRouter = require("./home/home.router");
 const authRouter = require("./auth/auth.router");
 const dashboardRouter = require("./dashboard/dashboard.router");
+const chatRouter = require("./chat/chat.router");
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
 app.use("/", homeRouter);
 app.use("/auth", authRouter);
 app.use("/dashboard", dashboardRouter);
+app.use("/", chatRouter);
 
 // 라우터에서 처리되지 않을 시 404에러 포착
 app.use(function (req, res, next) {
