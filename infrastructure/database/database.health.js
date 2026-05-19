@@ -7,7 +7,7 @@ async function checkDbConnection() {
     console.log("[DB] MySQL connection established.");
     return true;
   } catch (error) {
-    console.error("[DB] MySQL connection failed:", error.message);
+    console.error("[DB] MySQL connection failed:", error.stack.message);
     return false;
   } finally {
     if (connection) {

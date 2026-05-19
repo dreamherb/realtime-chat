@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <%- include('include/header', { title: "Set new password" }) %>
+
+  <body>
+    <main class="page">
+      <section class="section">
+        <h1 class="logo">새 비밀번호</h1>
+
+        <div class="card card--auth">
+          <p class="muted" style="margin-bottom: 1rem">
+            인증이 완료된 계정만 비밀번호를 변경할 수 있습니다.
+          </p>
+
+          <form class="form" action="#" method="post" onsubmit="return false;">
+            <div class="form__group">
+              <label for="password" class="form__label">새 비밀번호</label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                minlength="8"
+                required
+                placeholder="8자 이상"
+                class="input"
+              />
+            </div>
+
+            <div class="form__group">
+              <label for="confirmPassword" class="form__label">새 비밀번호 확인</label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                placeholder="다시 입력"
+                class="input"
+              />
+            </div>
+
+            <button
+              id="resetPwdBtn"
+              class="btn btn--primary btn--block"
+              type="button"
+            >
+              비밀번호 변경
+            </button>
+
+            <div class="row row--center row--gap-sm">
+              <a class="btn btn--ghost" href="/auth/login">로그인으로</a>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+    <%- include('include/footer') %>
+    <div class="modal-overlay" id="alertModalOverlay">
+      <div class="modal" id="alertModal">
+        <h2>Notice</h2>
+        <p id="alertModalMsg"></p>
+        <button onclick="closeAlertModal()">확인</button>
+      </div>
+    </div>
+  </body>
+  <script src="/js/jquery-3.7.1.min.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/forgot-reset.js"></script>
+</html>

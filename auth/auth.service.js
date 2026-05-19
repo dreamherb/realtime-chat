@@ -12,7 +12,7 @@ async function createUser({ nickname, encryptedEmail, passwordHash }) {
     const [result] = await pool.query(sql, params);
     return result;
   } catch (error) {
-    console.error("ERROR IN CREATE USER : ", error);
+    console.error("ERROR IN CREATE USER : ", error.stack);
     throw error;
   }
 }
@@ -29,7 +29,7 @@ async function findUserByEmail(encryptedEmail) {
     const [rows] = await pool.query(sql, params);
     return rows[0] || null;
   } catch (error) {
-    console.error("ERROR IN FIND USER BY EMAIL : ", error);
+    console.error("ERROR IN FIND USER BY EMAIL : ", error.stack);
     throw error;
   }
 }

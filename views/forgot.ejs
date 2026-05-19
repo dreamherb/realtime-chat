@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <%- include('include/header', { title: "Forgot password" }) %>
+
+  <body>
+    <main class="page">
+      <section class="section">
+        <h1 class="logo">비밀번호 찾기</h1>
+
+        <div class="card card--auth">
+          <% if (reason === 'session') { %>
+          <p class="muted" style="margin-bottom: 1rem">
+            재설정 허가가 없거나 만료되었습니다. 이메일 인증을 다시 진행해 주세요.
+          </p>
+          <% } %>
+
+          <form class="form" action="#" method="post" onsubmit="return false;">
+            <div class="form__group">
+              <label for="email" class="form__label">Email</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                placeholder="you@example.com"
+                class="input"
+              />
+            </div>
+
+            <button
+              id="sendCodeBtn"
+              class="btn btn--secondary btn--block"
+              type="button"
+            >
+              인증번호 받기
+            </button>
+
+            <div class="form__group">
+              <label for="code" class="form__label">인증번호 (6자리)</label>
+              <input
+                id="code"
+                name="code"
+                type="text"
+                inputmode="numeric"
+                maxlength="6"
+                pattern="[0-9]{6}"
+                placeholder="000000"
+                class="input"
+              />
+            </div>
+
+            <button
+              id="verifyCodeBtn"
+              class="btn btn--primary btn--block"
+              type="button"
+            >
+              인증하고 비밀번호 변경
+            </button>
+
+            <div class="row row--center row--gap-sm">
+              <a class="btn btn--ghost" href="/auth/login">로그인으로</a>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+    <%- include('include/footer') %>
+    <div class="modal-overlay" id="alertModalOverlay">
+      <div class="modal" id="alertModal">
+        <h2>Notice</h2>
+        <p id="alertModalMsg"></p>
+        <button onclick="closeAlertModal()">확인</button>
+      </div>
+    </div>
+  </body>
+  <script src="/js/jquery-3.7.1.min.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/forgot.js"></script>
+</html>

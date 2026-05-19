@@ -12,7 +12,7 @@ async function getLogin(req, res, next) {
       return res.render("login");
     }
   } catch (error) {
-    console.error("ERROR IN GET /auth/login : ", error);
+    console.error("ERROR IN GET /auth/login : ", error.stack);
     res.status(500).send("An error occurred while getting /auth/login");
     return res.render("error");
   }
@@ -23,7 +23,7 @@ async function getSignup(req, res, next) {
   try {
     return res.render("signup");
   } catch (error) {
-    console.error("ERROR IN GET /auth/signup : ", error);
+    console.error("ERROR IN GET /auth/signup : ", error.stack);
     res.status(500).send("An error occurred while getting /auth/signup");
     return res.render("error");
   }
@@ -95,7 +95,7 @@ async function postLogin(req, res, next) {
       redirectUrl: "/dashboard",
     });
   } catch (error) {
-    console.error("ERROR IN POST /auth/login : ", error);
+    console.error("ERROR IN POST /auth/login : ", error.stack);
     return res.status(500).json({
       success: false,
       message: "로그인 처리 중 오류가 발생했습니다.",
@@ -142,7 +142,7 @@ async function postSignup(req, res, next) {
       redirectUrl: "/auth/login",
     });
   } catch (error) {
-    console.error("ERROR IN POST /auth/signup : ", error);
+    console.error("ERROR IN POST /auth/signup : ", error.stack);
     return res.status(500).json({
       success: false,
       message: "회원가입 처리 중 오류가 발생했습니다.",

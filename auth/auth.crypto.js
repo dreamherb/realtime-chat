@@ -48,7 +48,7 @@ async function hashPassword(password) {
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
     return hashedPassword;
   } catch (error) {
-    console.error("ERROR IN HASH PASSWORD : ", error);
+    console.error("ERROR IN HASH PASSWORD : ", error.stack);
     throw error;
   }
 }
@@ -58,7 +58,7 @@ async function verifyPassword(plainPassword, hashedPassword) {
     const isPasswordValid = await bcrypt.compare(plainPassword, hashedPassword);
     return isPasswordValid;
   } catch (error) {
-    console.error("ERROR IN VERIFY PASSWORD : ", error);
+    console.error("ERROR IN VERIFY PASSWORD : ", error.stack);
     throw error;
   }
 }
