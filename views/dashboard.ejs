@@ -69,17 +69,31 @@
               id="messageText"
               placeholder="메시지를 입력하세요"
               autocomplete="off"
-              disabled
             />
-            <button class="btn btn--primary" type="submit" disabled>Send</button>
+            <button class="btn btn--primary" type="submit">Send</button>
           </form>
-          <p class="muted" style="padding: 0 16px 16px; font-size: 12px;">
-            메시지 전송은 다음 단계에서 구현됩니다.
-          </p>
           <% } %>
         </section>
       </section>
     </main>
     <%- include('include/footer') %>
+    <div class="modal-overlay" id="alertModalOverlay">
+      <div class="modal" id="alertModal">
+        <h2>Notice</h2>
+        <p id="alertModalMsg"></p>
+        <button onclick="closeAlertModal()">확인</button>
+      </div>
+    </div>
+    <script src="/js/common.js"></script>
+    <% if (selectedRoomId) { %>
+    <script>
+      window.__DASHBOARD__ = {
+        roomId: <%- JSON.stringify(selectedRoomId) %>,
+        currentUser: <%- JSON.stringify(user.name) %>,
+        lastMessageId: <%- JSON.stringify((messages && messages.length ? messages[messages.length - 1].id : 0)) %>
+      };
+    </script>
+    <script src="/js/dashboard.js"></script>
+    <% } %>
   </body>
 </html>
