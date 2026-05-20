@@ -137,28 +137,67 @@ function formatMessageTime(createdAt) {
   });
 }
 
-async function getMessagesForRoom(roomId, userId) {
+function mapMessageRow(row) {
+  return {
+    id: row.id,
+    senderId: row.sender_id,
+    from: row.sender_nickname,
+    time: formatMessageTime(row.created_at),
+    text: row.content,
+  };
+}
+
+async function getMessagesForRoom(roomId, userId, { sinceId } = {}) {
   const member = await isRoomMember(roomId, userId);
   if (!member) {
     return [];
   }
 
+  const params = [roomId];
+  let whereSince = "";
+  if (sinceId) {
+    whereSince = " AND m.id > ?";
+    params.push(Number(sinceId));
+  }
+
   const sql = `
-    SELECT m.content, m.created_at, u.nickname AS sender_nickname
+    SELECT m.id, m.sender_id, m.content, m.created_at, u.nickname AS sender_nickname
     FROM messages m
     INNER JOIN users u ON u.id = m.sender_id
-    WHERE m.room_id = ?
-    ORDER BY m.created_at ASC
-    LIMIT 100
+    WHERE m.room_id = ?${whereSince}
+    ORDER BY m.id ASC
+    LIMIT 200
   `;
 
-  const [rows] = await pool.query(sql, [roomId]);
+  const [rows] = await pool.query(sql, params);
+  return rows.map(mapMessageRow);
+}
 
-  return rows.map((row) => ({
-    from: row.sender_nickname,
-    time: formatMessageTime(row.created_at),
-    text: row.content,
-  }));
+async function createMessage({ roomId, senderId, content }) {
+  const member = await isRoomMember(roomId, senderId);
+  if (!member) {
+    return { ok: false, reason: "NOT_MEMBER" };
+  }
+
+  const trimmed = String(content || "").trim();
+  if (!trimmed) {
+    return { ok: false, reason: "EMPTY_CONTENT" };
+  }
+
+  const [insertResult] = await pool.query(
+    "INSERT INTO messages (room_id, sender_id, content) VALUES (?, ?, ?)",
+    [roomId, senderId, trimmed],
+  );
+
+  const [rows] = await pool.query(
+    `SELECT m.id, m.sender_id, m.content, m.created_at, u.nickname AS sender_nickname
+     FROM messages m
+     INNER JOIN users u ON u.id = m.sender_id
+     WHERE m.id = ?`,
+    [insertResult.insertId],
+  );
+
+  return { ok: true, message: mapMessageRow(rows[0]) };
 }
 
 async function getRoomDisplayName(roomId, userId) {
@@ -176,4 +215,5 @@ module.exports = {
   createGroupRoom,
   getMessagesForRoom,
   getRoomDisplayName,
+  createMessage,
 };

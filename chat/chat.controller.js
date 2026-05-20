@@ -108,6 +108,110 @@ const chatController = {
       });
     }
   },
+
+  async getMessages(req, res) {
+    try {
+      const sessionUser = await resolveSessionUser(req);
+      if (!sessionUser) {
+        return res.status(401).json({
+          success: false,
+          message: "로그인이 필요합니다.",
+        });
+      }
+
+      const roomId = Number(req.params.roomId);
+      if (!Number.isFinite(roomId)) {
+        return res.status(400).json({
+          success: false,
+          message: "유효하지 않은 채팅방입니다.",
+        });
+      }
+
+      const isMember = await chatService.isRoomMember(roomId, sessionUser.id);
+      if (!isMember) {
+        return res.status(403).json({
+          success: false,
+          message: "해당 채팅방의 멤버가 아닙니다.",
+        });
+      }
+
+      const messages = await chatService.getMessagesForRoom(
+        roomId,
+        sessionUser.id,
+        { sinceId: req.query.sinceId },
+      );
+
+      return res.status(200).json({
+        success: true,
+        messages,
+        currentUserId: sessionUser.id,
+      });
+    } catch (error) {
+      console.error("ERROR IN GET /api/rooms/:roomId/messages : ", error.stack);
+      return res.status(500).json({
+        success: false,
+        message: "메시지 조회 중 오류가 발생했습니다.",
+      });
+    }
+  },
+
+  async postMessage(req, res) {
+    try {
+      const sessionUser = await resolveSessionUser(req);
+      if (!sessionUser) {
+        return res.status(401).json({
+          success: false,
+          message: "로그인이 필요합니다.",
+        });
+      }
+
+      const roomId = Number(req.params.roomId);
+      if (!Number.isFinite(roomId)) {
+        return res.status(400).json({
+          success: false,
+          message: "유효하지 않은 채팅방입니다.",
+        });
+      }
+
+      const { content } = req.body || {};
+      if (!content || !String(content).trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "메시지 내용을 입력해주세요.",
+        });
+      }
+
+      const result = await chatService.createMessage({
+        roomId,
+        senderId: sessionUser.id,
+        content,
+      });
+
+      if (!result.ok) {
+        if (result.reason === "NOT_MEMBER") {
+          return res.status(403).json({
+            success: false,
+            message: "해당 채팅방의 멤버가 아닙니다.",
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: "메시지를 전송할 수 없습니다.",
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error("ERROR IN POST /api/rooms/:roomId/messages : ", error.stack);
+      return res.status(500).json({
+        success: false,
+        message: "메시지 전송 중 오류가 발생했습니다.",
+      });
+    }
+  },
 };
 
 module.exports = chatController;
