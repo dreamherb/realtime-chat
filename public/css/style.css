@@ -238,6 +238,42 @@ body {
   border-color: #c7d2fe
 }
 
+.roomlist__section-title {
+  margin: 20px 0 8px 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.roomlist--joinable {
+  gap: 4px;
+}
+
+.roomlist__joinable-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.roomlist__joinable-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn--xs {
+  padding: 4px 10px;
+  font-size: 12px;
+  height: auto;
+}
+
 .chat {
   background: var(--surface);
   border: 1px solid var(--line);

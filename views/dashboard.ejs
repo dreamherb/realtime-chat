@@ -27,6 +27,22 @@
               </a>
             <% }) %>
           </nav>
+
+          <% if ((joinableGroups || []).length) { %>
+          <h3 class="roomlist__section-title">참여 가능한 그룹</h3>
+          <nav class="roomlist roomlist--joinable">
+            <% joinableGroups.forEach(function(g){ %>
+              <div class="roomlist__joinable-item">
+                <span class="roomlist__joinable-name"># <%= g.name %></span>
+                <button
+                  class="btn btn--secondary btn--xs js-join-group"
+                  type="button"
+                  data-room-id="<%= g.id %>"
+                >참여</button>
+              </div>
+            <% }) %>
+          </nav>
+          <% } %>
         </aside>
 
         <section class="chat">
@@ -85,15 +101,13 @@
       </div>
     </div>
     <script src="/js/common.js"></script>
-    <% if (selectedRoomId) { %>
     <script>
       window.__DASHBOARD__ = {
-        roomId: <%- JSON.stringify(selectedRoomId) %>,
+        roomId: <%- JSON.stringify(selectedRoomId || null) %>,
         currentUser: <%- JSON.stringify(user.name) %>,
         lastMessageId: <%- JSON.stringify((messages && messages.length ? messages[messages.length - 1].id : 0)) %>
       };
     </script>
     <script src="/js/dashboard.js"></script>
-    <% } %>
   </body>
 </html>

@@ -9,6 +9,7 @@ async function getDashboardViewData(userId, roomId) {
   }
 
   const rooms = await chatService.listRoomsForUser(userId);
+  const joinableGroups = await chatService.listJoinableGroups(userId);
   let messages = [];
   let currentRoom = "채팅방을 선택해 주세요";
   let selectedRoomId = null;
@@ -32,6 +33,7 @@ async function getDashboardViewData(userId, roomId) {
       name: dbUser.nickname,
     },
     rooms,
+    joinableGroups,
     messages,
     currentRoom,
     selectedRoomId,

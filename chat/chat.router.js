@@ -16,5 +16,10 @@ router.post(
   requireAuth,
   chatController.postMessage,
 );
+router.post(
+  "/api/rooms/:roomId/join",
+  requireAuth,
+  chatController.postJoinRoom,
+);
 
 module.exports = router;

@@ -212,6 +212,62 @@ const chatController = {
       });
     }
   },
+
+  async postJoinRoom(req, res) {
+    try {
+      const sessionUser = await resolveSessionUser(req);
+      if (!sessionUser) {
+        return res.status(401).json({
+          success: false,
+          message: "로그인이 필요합니다.",
+        });
+      }
+
+      const roomId = Number(req.params.roomId);
+      if (!Number.isFinite(roomId)) {
+        return res.status(400).json({
+          success: false,
+          message: "유효하지 않은 채팅방입니다.",
+        });
+      }
+
+      const result = await chatService.joinGroup(roomId, sessionUser.id);
+
+      if (!result.ok) {
+        if (result.reason === "ROOM_NOT_FOUND") {
+          return res.status(404).json({
+            success: false,
+            message: "채팅방을 찾을 수 없습니다.",
+          });
+        }
+        if (result.reason === "NOT_JOINABLE") {
+          return res.status(400).json({
+            success: false,
+            message: "참여할 수 없는 채팅방입니다.",
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: "참여에 실패했습니다.",
+        });
+      }
+
+      return res.status(result.alreadyMember ? 200 : 201).json({
+        success: true,
+        message: result.alreadyMember
+          ? "이미 참여 중인 채팅방입니다."
+          : "그룹에 참여했습니다.",
+        roomId: result.roomId,
+        redirectUrl: `/dashboard?roomId=${result.roomId}`,
+      });
+    } catch (error) {
+      console.error("ERROR IN POST /api/rooms/:roomId/join : ", error.stack);
+      return res.status(500).json({
+        success: false,
+        message: "그룹 참여 중 오류가 발생했습니다.",
+      });
+    }
+  },
 };
 
 module.exports = chatController;

@@ -127,6 +127,59 @@ async function createGroupRoom(creatorId, name) {
   return { ok: true, roomId };
 }
 
+async function listJoinableGroups(userId) {
+  const sql = `
+    SELECT
+      r.id,
+      r.name,
+      r.created_at,
+      (SELECT COUNT(*) FROM chat_room_members WHERE room_id = r.id) AS member_count
+    FROM chat_rooms r
+    WHERE r.type = ?
+      AND r.id NOT IN (
+        SELECT room_id FROM chat_room_members WHERE user_id = ?
+      )
+    ORDER BY r.created_at DESC
+    LIMIT 50
+  `;
+
+  const [rows] = await pool.query(sql, [ROOM_TYPE.GROUP, userId]);
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name || "그룹 채팅",
+    memberCount: Number(row.member_count),
+  }));
+}
+
+async function joinGroup(roomId, userId) {
+  const [roomRows] = await pool.query(
+    "SELECT type FROM chat_rooms WHERE id = ?",
+    [roomId],
+  );
+  const room = roomRows[0];
+
+  if (!room) {
+    return { ok: false, reason: "ROOM_NOT_FOUND" };
+  }
+
+  if (room.type !== ROOM_TYPE.GROUP) {
+    return { ok: false, reason: "NOT_JOINABLE" };
+  }
+
+  const alreadyMember = await isRoomMember(roomId, userId);
+  if (alreadyMember) {
+    return { ok: true, roomId, alreadyMember: true };
+  }
+
+  await pool.query(
+    "INSERT INTO chat_room_members (room_id, user_id) VALUES (?, ?)",
+    [roomId, userId],
+  );
+
+  return { ok: true, roomId, alreadyMember: false };
+}
+
 function formatMessageTime(createdAt) {
   const date = new Date(createdAt);
   return date.toLocaleString("ko-KR", {
@@ -216,4 +269,6 @@ module.exports = {
   getMessagesForRoom,
   getRoomDisplayName,
   createMessage,
+  listJoinableGroups,
+  joinGroup,
 };
