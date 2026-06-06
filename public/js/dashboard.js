@@ -1,9 +1,6 @@
-const POLL_INTERVAL_MS = 2500;
-
 const roomId = window.__DASHBOARD__.roomId;
 const currentUser = window.__DASHBOARD__.currentUser;
 let lastMessageId = window.__DASHBOARD__.lastMessageId || 0;
-let pollTimer = null;
 
 function escapeHtml(str) {
   return String(str)
@@ -23,7 +20,7 @@ function buildMessageHtml(msg) {
     </article>`;
 }
 
-// 채팅방 메시지 폴링/전송 (roomId 있을 때만)
+// 채팅방 실시간 통신 (roomId 있을 때만)
 if (roomId) {
   const $messages = $("#messages");
   const $form = $("#messageForm");
@@ -33,37 +30,47 @@ if (roomId) {
     $messages.scrollTop($messages[0].scrollHeight);
   }
 
-  scrollToBottom();
-
-  function pollNewMessages() {
-    $.ajax({
-      url: `/api/rooms/${roomId}/messages`,
-      type: "GET",
-      data: { sinceId: lastMessageId },
-      success: function (data) {
-        if (!data.success || !data.messages.length) return;
-
-        $messages.find("p.muted").remove();
-
-        data.messages.forEach(function (msg) {
-          $messages.append(buildMessageHtml(msg));
-          if (msg.id > lastMessageId) {
-            lastMessageId = msg.id;
-          }
-        });
-
-        scrollToBottom();
-      },
-      error: function (xhr) {
-        if (xhr.status === 401) {
-          clearInterval(pollTimer);
-          window.location.href = "/";
-        }
-      },
-    });
+  function appendMessage(msg) {
+    if (!msg || (msg.id && msg.id <= lastMessageId)) return;
+    $messages.find("p.muted").remove();
+    $messages.append(buildMessageHtml(msg));
+    if (msg.id > lastMessageId) {
+      lastMessageId = msg.id;
+    }
+    scrollToBottom();
   }
 
-  pollTimer = setInterval(pollNewMessages, POLL_INTERVAL_MS);
+  scrollToBottom();
+
+  // socket.io 연결 (usi 쿠키로 인증)
+  const socket = io({
+    transports: ["websocket", "polling"],
+    withCredentials: true,
+  });
+
+  socket.on("connect", () => {
+    socket.emit("room:join", { roomId }, (res) => {
+      if (!res?.ok) {
+        showAlertModal(res?.message || "채팅방 참여에 실패했습니다.");
+      }
+    });
+  });
+
+  socket.on("connect_error", (err) => {
+    if (err && err.message === "UNAUTHORIZED") {
+      window.location.href = "/";
+      return;
+    }
+    console.error("[socket] connect_error:", err?.message || err);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.warn("[socket] disconnected:", reason);
+  });
+
+  socket.on("message:new", ({ message }) => {
+    appendMessage(message);
+  });
 
   $form.on("submit", function (e) {
     e.preventDefault();
@@ -72,36 +79,15 @@ if (roomId) {
 
     $input.prop("disabled", true);
 
-    $.ajax({
-      url: `/api/rooms/${roomId}/messages`,
-      type: "POST",
-      contentType: "application/json",
-      data: JSON.stringify({ content }),
-      success: function (data) {
-        if (!data.success) {
-          return showAlertModal(data.message || "전송에 실패했습니다.");
-        }
+    socket.emit("message:send", { roomId, content }, (res) => {
+      $input.prop("disabled", false).focus();
 
-        $messages.find("p.muted").remove();
-        $messages.append(buildMessageHtml(data.message));
-        if (data.message.id > lastMessageId) {
-          lastMessageId = data.message.id;
-        }
+      if (!res?.ok) {
+        return showAlertModal(res?.message || "전송에 실패했습니다.");
+      }
 
-        scrollToBottom();
-        $input.val("");
-      },
-      error: function (xhr) {
-        try {
-          const res = xhr.responseJSON || JSON.parse(xhr.responseText || "{}");
-          showAlertModal(res.message || "전송에 실패했습니다.");
-        } catch {
-          showAlertModal("메시지 전송 중 오류가 발생했습니다.");
-        }
-      },
-      complete: function () {
-        $input.prop("disabled", false).focus();
-      },
+      appendMessage(res.message);
+      $input.val("");
     });
   });
 
@@ -113,7 +99,7 @@ if (roomId) {
   });
 
   $(window).on("beforeunload", function () {
-    clearInterval(pollTimer);
+    socket.disconnect();
   });
 }
 

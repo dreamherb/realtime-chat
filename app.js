@@ -12,6 +12,7 @@ const homeRouter = require("./home/home.router");
 const authRouter = require("./auth/auth.router");
 const dashboardRouter = require("./dashboard/dashboard.router");
 const chatRouter = require("./chat/chat.router");
+const { attachRealtime } = require("./chat/chat.realtime");
 
 const app = express();
 
@@ -41,6 +42,7 @@ const cspOptions = {
         "img-src": ["'self'", "data:", "*.amazonaws.com"],
         "frame-src": ["'self'", "*.youtube.com"],
         "frame-ancestors": ["'self'"], // 외부 도메인에서 iframe으로 해당 사이트 띄우는 것 허용
+        "connect-src": ["'self'", "ws:", "wss:"], // socket.io WebSocket
     },
 };
 
@@ -95,6 +97,7 @@ const PORT = process.env.SERVICE_PORT || 3000;
 app.set("port", PORT);
 
 const server = http.createServer(app);
+attachRealtime(server);
 
 server.listen(PORT);
 server.on("error", onError);
