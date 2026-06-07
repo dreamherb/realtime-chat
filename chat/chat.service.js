@@ -5,6 +5,12 @@ const ROOM_TYPE = {
   GROUP: "GROUP",
 };
 
+const MESSAGE_TYPE = {
+  TEXT: "TEXT",
+  SYSTEM_JOIN: "SYSTEM_JOIN",
+  SYSTEM_LEAVE: "SYSTEM_LEAVE",
+};
+
 async function listRoomsForUser(userId) {
   const sql = `
     SELECT
@@ -152,6 +158,27 @@ async function listJoinableGroups(userId) {
   }));
 }
 
+async function leaveRoom(roomId, userId) {
+  const [roomRows] = await pool.query(
+    "SELECT id FROM chat_rooms WHERE id = ?",
+    [roomId],
+  );
+  if (!roomRows.length) {
+    return { ok: false, reason: "ROOM_NOT_FOUND" };
+  }
+
+  const [result] = await pool.query(
+    "DELETE FROM chat_room_members WHERE room_id = ? AND user_id = ?",
+    [roomId, userId],
+  );
+
+  if (result.affectedRows === 0) {
+    return { ok: false, reason: "NOT_MEMBER" };
+  }
+
+  return { ok: true };
+}
+
 async function joinGroup(roomId, userId) {
   const [roomRows] = await pool.query(
     "SELECT type FROM chat_rooms WHERE id = ?",
@@ -193,6 +220,7 @@ function formatMessageTime(createdAt) {
 function mapMessageRow(row) {
   return {
     id: row.id,
+    type: row.type || MESSAGE_TYPE.TEXT,
     senderId: row.sender_id,
     from: row.sender_nickname,
     time: formatMessageTime(row.created_at),
@@ -200,30 +228,47 @@ function mapMessageRow(row) {
   };
 }
 
-async function getMessagesForRoom(roomId, userId, { sinceId } = {}) {
-  const member = await isRoomMember(roomId, userId);
-  if (!member) {
+async function getMessagesForRoom(roomId, userId) {
+  // 본인의 joined_at을 가져와 그 이후 메시지만 노출 (입장 전 기록 숨김)
+  const [memberRows] = await pool.query(
+    "SELECT joined_at FROM chat_room_members WHERE room_id = ? AND user_id = ? LIMIT 1",
+    [roomId, userId],
+  );
+
+  if (!memberRows.length) {
     return [];
   }
 
-  const params = [roomId];
-  let whereSince = "";
-  if (sinceId) {
-    whereSince = " AND m.id > ?";
-    params.push(Number(sinceId));
-  }
+  const joinedAt = memberRows[0].joined_at;
 
   const sql = `
-    SELECT m.id, m.sender_id, m.content, m.created_at, u.nickname AS sender_nickname
+    SELECT m.id, m.type, m.sender_id, m.content, m.created_at, u.nickname AS sender_nickname
     FROM messages m
     INNER JOIN users u ON u.id = m.sender_id
-    WHERE m.room_id = ?${whereSince}
+    WHERE m.room_id = ? AND m.created_at >= ?
     ORDER BY m.id ASC
     LIMIT 200
   `;
 
-  const [rows] = await pool.query(sql, params);
+  const [rows] = await pool.query(sql, [roomId, joinedAt]);
   return rows.map(mapMessageRow);
+}
+
+async function insertMessageRow({ roomId, senderId, type, content }) {
+  const [insertResult] = await pool.query(
+    "INSERT INTO messages (room_id, sender_id, type, content) VALUES (?, ?, ?, ?)",
+    [roomId, senderId, type, content],
+  );
+
+  const [rows] = await pool.query(
+    `SELECT m.id, m.type, m.sender_id, m.content, m.created_at, u.nickname AS sender_nickname
+     FROM messages m
+     INNER JOIN users u ON u.id = m.sender_id
+     WHERE m.id = ?`,
+    [insertResult.insertId],
+  );
+
+  return mapMessageRow(rows[0]);
 }
 
 async function createMessage({ roomId, senderId, content }) {
@@ -237,20 +282,27 @@ async function createMessage({ roomId, senderId, content }) {
     return { ok: false, reason: "EMPTY_CONTENT" };
   }
 
-  const [insertResult] = await pool.query(
-    "INSERT INTO messages (room_id, sender_id, content) VALUES (?, ?, ?)",
-    [roomId, senderId, trimmed],
-  );
+  const message = await insertMessageRow({
+    roomId,
+    senderId,
+    type: MESSAGE_TYPE.TEXT,
+    content: trimmed,
+  });
 
-  const [rows] = await pool.query(
-    `SELECT m.id, m.sender_id, m.content, m.created_at, u.nickname AS sender_nickname
-     FROM messages m
-     INNER JOIN users u ON u.id = m.sender_id
-     WHERE m.id = ?`,
-    [insertResult.insertId],
-  );
+  return { ok: true, message };
+}
 
-  return { ok: true, message: mapMessageRow(rows[0]) };
+/**
+ * 입장/퇴장 시스템 메시지를 messages 테이블에 저장합니다.
+ * sender_id는 행위자(입장자/퇴장자) user.id, content는 빈 문자열.
+ */
+async function createSystemMessage({ roomId, actorId, kind }) {
+  return insertMessageRow({
+    roomId,
+    senderId: actorId,
+    type: kind === "JOIN" ? MESSAGE_TYPE.SYSTEM_JOIN : MESSAGE_TYPE.SYSTEM_LEAVE,
+    content: "",
+  });
 }
 
 async function getRoomDisplayName(roomId, userId) {
@@ -261,6 +313,7 @@ async function getRoomDisplayName(roomId, userId) {
 
 module.exports = {
   ROOM_TYPE,
+  MESSAGE_TYPE,
   listRoomsForUser,
   findExistingDmRoom,
   isRoomMember,
@@ -269,6 +322,9 @@ module.exports = {
   getMessagesForRoom,
   getRoomDisplayName,
   createMessage,
+  createSystemMessage,
   listJoinableGroups,
   joinGroup,
+  leaveRoom,
+  formatMessageTime,
 };

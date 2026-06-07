@@ -5,9 +5,21 @@ const authService = require("../auth/auth.service");
 const chatService = require("./chat.service");
 
 const ROOM_PREFIX = "room:";
+const USER_PREFIX = "user:";
 
 function roomChannel(roomId) {
   return ROOM_PREFIX + roomId;
+}
+
+function userChannel(userId) {
+  return USER_PREFIX + userId;
+}
+
+// 모듈 전역에서 attach 이후 접근 가능하도록 보관
+let ioInstance = null;
+
+function getIo() {
+  return ioInstance;
 }
 
 async function authenticate(socket, next) {
@@ -50,6 +62,9 @@ async function authenticate(socket, next) {
 
 function bindHandlers(io, socket) {
   const user = socket.data.user;
+
+  // 사용자 단위 채널에 자동 가입 (멀티탭/디바이스 일괄 제어용)
+  socket.join(userChannel(user.id));
 
   socket.on("room:join", async ({ roomId } = {}, ack) => {
     try {
@@ -127,9 +142,65 @@ function attachRealtime(httpServer) {
     bindHandlers(io, socket);
   });
 
+  ioInstance = io;
   return io;
+}
+
+/**
+ * 새 멤버 가입 처리:
+ * 1) DB에 SYSTEM_JOIN 메시지 저장 (새로고침해도 보이도록 영속화)
+ * 2) 채팅방의 현재 접속자에게 message:new로 broadcast
+ */
+async function notifyRoomMemberJoined(roomId, actorId) {
+  if (!ioInstance) return;
+  try {
+    const message = await chatService.createSystemMessage({
+      roomId,
+      actorId,
+      kind: "JOIN",
+    });
+    ioInstance.to(roomChannel(roomId)).emit("message:new", {
+      roomId,
+      message,
+    });
+  } catch (error) {
+    console.error("[socket] notifyRoomMemberJoined error:", error.stack);
+  }
+}
+
+/**
+ * 멤버 퇴장 처리:
+ * 1) DB에 SYSTEM_LEAVE 메시지 저장
+ * 2) 퇴장자의 모든 소켓을 room에서 leave (이후 broadcast 수신 차단)
+ * 3) 남은 멤버에게 message:new로 broadcast
+ * 4) 퇴장자의 모든 탭에 room:left push → 자동 /dashboard 이동
+ */
+async function notifyRoomMemberLeft(userId, roomId) {
+  if (!ioInstance) return;
+  const userRoom = userChannel(userId);
+  try {
+    const message = await chatService.createSystemMessage({
+      roomId,
+      actorId: userId,
+      kind: "LEAVE",
+    });
+
+    ioInstance.in(userRoom).socketsLeave(roomChannel(roomId));
+
+    ioInstance.to(roomChannel(roomId)).emit("message:new", {
+      roomId,
+      message,
+    });
+
+    ioInstance.to(userRoom).emit("room:left", { roomId });
+  } catch (error) {
+    console.error("[socket] notifyRoomMemberLeft error:", error.stack);
+  }
 }
 
 module.exports = {
   attachRealtime,
+  getIo,
+  notifyRoomMemberJoined,
+  notifyRoomMemberLeft,
 };

@@ -47,9 +47,20 @@
 
         <section class="chat">
           <header class="chat__header">
-            <h3 class="chat__title">
-              <%= currentRoom %>
-            </h3>
+            <div class="row row--gap-sm row--center">
+              <% if (selectedRoomId) { %>
+              <button
+                type="button"
+                class="btn btn--ghost btn--xs js-leave-room"
+                data-room-id="<%= selectedRoomId %>"
+                title="채팅방 나가기"
+                aria-label="채팅방 나가기"
+              >←</button>
+              <% } %>
+              <h3 class="chat__title">
+                <%= currentRoom %>
+              </h3>
+            </div>
             <div class="row row--gap-sm">
               <a class="btn btn--secondary" href="/notifications">Notifications</a>
               <a class="btn btn--secondary" href="/invite">Invite</a>
@@ -65,14 +76,23 @@
               <p class="muted">왼쪽에서 채팅방을 선택하거나 새 채팅을 만드세요.</p>
             <% } %>
             <% (messages || []).forEach(function(m){ %>
-              <article class="msg <%= m.from === (user && user.name) ? 'msg--me' : '' %>">
-                <div class="msg__meta">
-                  <%= m.from %> · <%= m.time %>
+              <% if (m.type === 'SYSTEM_JOIN' || m.type === 'SYSTEM_LEAVE') { %>
+                <div class="msg msg--system">
+                  <span class="msg--system__body">
+                    <%= m.from %>님이 <%= m.type === 'SYSTEM_JOIN' ? '입장' : '퇴장' %>했습니다.
+                  </span>
+                  <span class="msg--system__time"><%= m.time %></span>
                 </div>
-                <div class="msg__body">
-                  <%= m.text %>
-                </div>
-              </article>
+              <% } else { %>
+                <article class="msg <%= m.from === (user && user.name) ? 'msg--me' : '' %>">
+                  <div class="msg__meta">
+                    <%= m.from %> · <%= m.time %>
+                  </div>
+                  <div class="msg__body">
+                    <%= m.text %>
+                  </div>
+                </article>
+              <% } %>
             <% }) %>
           </div>
 
