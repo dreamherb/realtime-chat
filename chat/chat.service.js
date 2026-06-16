@@ -154,16 +154,27 @@ async function createGroupRoom(creatorId, name) {
 }
 
 async function listJoinableGroups(userId) {
+  // 활성 멤버(left_at IS NULL)만 기준으로 집계:
+  // - 본인이 활성 멤버인 방은 제외 (떠난 적 있는 방은 다시 노출)
+  // - 활성 멤버가 0명인 빈 그룹은 후보에서 제외
   const sql = `
     SELECT
       r.id,
       r.name,
       r.created_at,
-      (SELECT COUNT(*) FROM chat_room_members WHERE room_id = r.id) AS member_count
+      (
+        SELECT COUNT(*) FROM chat_room_members
+        WHERE room_id = r.id AND left_at IS NULL
+      ) AS member_count
     FROM chat_rooms r
     WHERE r.type = ?
       AND r.id NOT IN (
-        SELECT room_id FROM chat_room_members WHERE user_id = ?
+        SELECT room_id FROM chat_room_members
+        WHERE user_id = ? AND left_at IS NULL
+      )
+      AND EXISTS (
+        SELECT 1 FROM chat_room_members
+        WHERE room_id = r.id AND left_at IS NULL
       )
     ORDER BY r.created_at DESC
     LIMIT 50
@@ -187,15 +198,11 @@ async function leaveRoom(roomId, userId) {
     return { ok: false, reason: "ROOM_NOT_FOUND" };
   }
 
-  const isDm = roomRows[0].type === ROOM_TYPE.DM;
-
-  // DM: soft-leave (left_at 갱신) — 데이터·상대 멤버십 보존, 재참여 시 같은 방 사용
-  // 그룹: hard-delete — 재참여 시 새 행 INSERT (joined_at 자연 갱신)
-  const sql = isDm
-    ? "UPDATE chat_room_members SET left_at = NOW() WHERE room_id = ? AND user_id = ? AND left_at IS NULL"
-    : "DELETE FROM chat_room_members WHERE room_id = ? AND user_id = ?";
-
-  const [result] = await pool.query(sql, [roomId, userId]);
+  // DM/그룹 모두 soft-leave (left_at 갱신) — 데이터·상대 멤버십 보존, 재참여 시 복원
+  const [result] = await pool.query(
+    "UPDATE chat_room_members SET left_at = NOW() WHERE room_id = ? AND user_id = ? AND left_at IS NULL",
+    [roomId, userId],
+  );
 
   if (result.affectedRows === 0) {
     return { ok: false, reason: "NOT_MEMBER" };
@@ -224,8 +231,12 @@ async function joinGroup(roomId, userId) {
     return { ok: true, roomId, alreadyMember: true };
   }
 
+  // 신규 가입이면 INSERT, 이전에 나갔던 row(left_at NOT NULL)가 있으면 복원
+  // uq_room_user UNIQUE 키 덕분에 ON DUPLICATE KEY UPDATE가 한 번에 두 경우를 처리
   await pool.query(
-    "INSERT INTO chat_room_members (room_id, user_id) VALUES (?, ?)",
+    `INSERT INTO chat_room_members (room_id, user_id)
+     VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE joined_at = NOW(), left_at = NULL`,
     [roomId, userId],
   );
 
