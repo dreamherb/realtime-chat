@@ -194,7 +194,9 @@ const chatController = {
       const result = await chatService.leaveRoom(roomId, sessionUser.id);
 
       if (result.ok) {
-        await notifyRoomMemberLeft(sessionUser.id, roomId);
+        await notifyRoomMemberLeft(sessionUser.id, roomId, {
+          announce: result.roomType !== chatService.ROOM_TYPE.DM,
+        });
       }
 
       if (!result.ok) {

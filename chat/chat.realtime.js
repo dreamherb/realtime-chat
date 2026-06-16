@@ -170,27 +170,28 @@ async function notifyRoomMemberJoined(roomId, actorId) {
 
 /**
  * 멤버 퇴장 처리:
- * 1) DB에 SYSTEM_LEAVE 메시지 저장
- * 2) 퇴장자의 모든 소켓을 room에서 leave (이후 broadcast 수신 차단)
- * 3) 남은 멤버에게 message:new로 broadcast
- * 4) 퇴장자의 모든 탭에 room:left push → 자동 /dashboard 이동
+ * 1) 퇴장자의 모든 소켓을 room에서 leave (이후 broadcast 수신 차단)
+ * 2) announce=true일 때만 DB에 SYSTEM_LEAVE 저장 + 남은 멤버에 broadcast
+ *    (DM은 announce=false로 호출하여 시스템 메시지를 띄우지 않음)
+ * 3) 퇴장자의 모든 탭에 room:left push → 자동 /dashboard 이동
  */
-async function notifyRoomMemberLeft(userId, roomId) {
+async function notifyRoomMemberLeft(userId, roomId, { announce = true } = {}) {
   if (!ioInstance) return;
   const userRoom = userChannel(userId);
   try {
-    const message = await chatService.createSystemMessage({
-      roomId,
-      actorId: userId,
-      kind: "LEAVE",
-    });
-
     ioInstance.in(userRoom).socketsLeave(roomChannel(roomId));
 
-    ioInstance.to(roomChannel(roomId)).emit("message:new", {
-      roomId,
-      message,
-    });
+    if (announce) {
+      const message = await chatService.createSystemMessage({
+        roomId,
+        actorId: userId,
+        kind: "LEAVE",
+      });
+      ioInstance.to(roomChannel(roomId)).emit("message:new", {
+        roomId,
+        message,
+      });
+    }
 
     ioInstance.to(userRoom).emit("room:left", { roomId });
   } catch (error) {

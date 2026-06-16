@@ -30,7 +30,7 @@ async function listRoomsForUser(userId) {
       END AS display_name
     FROM chat_rooms r
     INNER JOIN chat_room_members crm ON crm.room_id = r.id
-    WHERE crm.user_id = ?
+    WHERE crm.user_id = ? AND crm.left_at IS NULL
     ORDER BY r.created_at DESC
   `;
 
@@ -64,9 +64,23 @@ async function findExistingDmRoom(userId, otherUserId) {
 
 async function isRoomMember(roomId, userId) {
   const sql =
-    "SELECT 1 FROM chat_room_members WHERE room_id = ? AND user_id = ? LIMIT 1";
+    "SELECT 1 FROM chat_room_members WHERE room_id = ? AND user_id = ? AND left_at IS NULL LIMIT 1";
   const [rows] = await pool.query(sql, [roomId, userId]);
   return rows.length > 0;
+}
+
+/**
+ * DM 한정: 떠난 멤버 행을 복원합니다.
+ * - left_at NULL로 활성화
+ * - joined_at을 갱신하여 떠난 기간 동안의 메시지는 보이지 않게 처리
+ */
+async function restoreDmMembership(roomId, userId) {
+  await pool.query(
+    `UPDATE chat_room_members
+     SET left_at = NULL, joined_at = NOW()
+     WHERE room_id = ? AND user_id = ? AND left_at IS NOT NULL`,
+    [roomId, userId],
+  );
 }
 
 async function createRoomWithMembers({ type, name, createdBy, memberIds }) {
@@ -107,8 +121,14 @@ async function createDmRoom(creatorId, targetUserId) {
     return { ok: false, reason: "SELF_DM" };
   }
 
+  // 양쪽이 한 번이라도 멤버였던 방을 찾음 (left_at 무관)
   const existingRoomId = await findExistingDmRoom(creatorId, targetUserId);
   if (existingRoomId) {
+    // 내가 나간 상태라면 조용히 복원 (joined_at 갱신으로 떠난 기간 메시지 숨김)
+    const stillActive = await isRoomMember(existingRoomId, creatorId);
+    if (!stillActive) {
+      await restoreDmMembership(existingRoomId, creatorId);
+    }
     return { ok: true, roomId: existingRoomId, existing: true };
   }
 
@@ -160,23 +180,28 @@ async function listJoinableGroups(userId) {
 
 async function leaveRoom(roomId, userId) {
   const [roomRows] = await pool.query(
-    "SELECT id FROM chat_rooms WHERE id = ?",
+    "SELECT type FROM chat_rooms WHERE id = ?",
     [roomId],
   );
   if (!roomRows.length) {
     return { ok: false, reason: "ROOM_NOT_FOUND" };
   }
 
-  const [result] = await pool.query(
-    "DELETE FROM chat_room_members WHERE room_id = ? AND user_id = ?",
-    [roomId, userId],
-  );
+  const isDm = roomRows[0].type === ROOM_TYPE.DM;
+
+  // DM: soft-leave (left_at 갱신) — 데이터·상대 멤버십 보존, 재참여 시 같은 방 사용
+  // 그룹: hard-delete — 재참여 시 새 행 INSERT (joined_at 자연 갱신)
+  const sql = isDm
+    ? "UPDATE chat_room_members SET left_at = NOW() WHERE room_id = ? AND user_id = ? AND left_at IS NULL"
+    : "DELETE FROM chat_room_members WHERE room_id = ? AND user_id = ?";
+
+  const [result] = await pool.query(sql, [roomId, userId]);
 
   if (result.affectedRows === 0) {
     return { ok: false, reason: "NOT_MEMBER" };
   }
 
-  return { ok: true };
+  return { ok: true, roomType: roomRows[0].type };
 }
 
 async function joinGroup(roomId, userId) {
@@ -230,8 +255,9 @@ function mapMessageRow(row) {
 
 async function getMessagesForRoom(roomId, userId) {
   // 본인의 joined_at을 가져와 그 이후 메시지만 노출 (입장 전 기록 숨김)
+  // 떠난 멤버(left_at IS NOT NULL)는 빈 결과로 처리
   const [memberRows] = await pool.query(
-    "SELECT joined_at FROM chat_room_members WHERE room_id = ? AND user_id = ? LIMIT 1",
+    "SELECT joined_at FROM chat_room_members WHERE room_id = ? AND user_id = ? AND left_at IS NULL LIMIT 1",
     [roomId, userId],
   );
 
