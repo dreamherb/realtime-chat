@@ -219,13 +219,61 @@ body {
 .roomlist__item {
   display: flex;
   align-items: center;
-  height: 40px;
-  padding: 0 10px;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 10px;
   border-radius: 8px;
   color: var(--text);
   text-decoration: none;
   border: 1px solid var(--line);
   background: #fff;
+}
+
+.roomlist__item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.roomlist__item-name {
+  font-size: 14px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roomlist__item-preview {
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roomlist__item--unread .roomlist__item-name {
+  font-weight: 600;
+}
+
+.roomlist__item--unread .roomlist__item-preview {
+  color: var(--text);
+}
+
+.roomlist__badge {
+  flex-shrink: 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #4f46e5;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
 }
 
 .roomlist__empty {
@@ -396,7 +444,7 @@ body {
   }
 
   .roomlist__item {
-    height: 36px
+    min-height: 36px
   }
 }
 

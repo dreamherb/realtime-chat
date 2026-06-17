@@ -66,6 +66,18 @@ function bindHandlers(io, socket) {
   // 사용자 단위 채널에 자동 가입 (멀티탭/디바이스 일괄 제어용)
   socket.join(userChannel(user.id));
 
+  // 참여 중인 모든 방 socket 채널 가입 (다른 방 메시지 수신용)
+  chatService
+    .listRoomsForUser(user.id)
+    .then((rooms) => {
+      for (const room of rooms) {
+        socket.join(roomChannel(room.id));
+      }
+    })
+    .catch((error) => {
+      console.error("[socket] join member rooms error:", error.stack);
+    });
+
   socket.on("room:join", async ({ roomId } = {}, ack) => {
     try {
       const numericRoomId = Number(roomId);
@@ -92,6 +104,26 @@ function bindHandlers(io, socket) {
       socket.leave(roomChannel(numericRoomId));
     }
     ack?.({ ok: true });
+  });
+
+  socket.on("room:read", async ({ roomId } = {}, ack) => {
+    try {
+      const numericRoomId = Number(roomId);
+      if (!Number.isFinite(numericRoomId)) {
+        return ack?.({ ok: false, message: "유효하지 않은 채팅방입니다." });
+      }
+
+      const isMember = await chatService.isRoomMember(numericRoomId, user.id);
+      if (!isMember) {
+        return ack?.({ ok: false, message: "멤버가 아닙니다." });
+      }
+
+      await chatService.markRoomAsRead(numericRoomId, user.id);
+      ack?.({ ok: true });
+    } catch (error) {
+      console.error("[socket] room:read error:", error.stack);
+      ack?.({ ok: false, message: "읽음 처리 중 오류가 발생했습니다." });
+    }
   });
 
   socket.on("message:send", async ({ roomId, content } = {}, ack) => {

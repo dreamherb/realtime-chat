@@ -27,20 +27,82 @@ async function listRoomsForUser(userId) {
           LIMIT 1
         )
         ELSE COALESCE(r.name, '그룹 채팅')
-      END AS display_name
+      END AS display_name,
+      (
+        SELECT COUNT(*)
+        FROM messages m
+        WHERE m.room_id = r.id
+          AND m.id > COALESCE(crm.last_read_message_id, 0)
+          AND m.created_at >= crm.joined_at
+          AND m.sender_id <> ?
+      ) AS unread_count,
+      (
+        SELECT m.type
+        FROM messages m
+        WHERE m.room_id = r.id
+          AND m.id > COALESCE(crm.last_read_message_id, 0)
+          AND m.created_at >= crm.joined_at
+          AND m.sender_id <> ?
+        ORDER BY m.id DESC
+        LIMIT 1
+      ) AS preview_type,
+      (
+        SELECT m.content
+        FROM messages m
+        WHERE m.room_id = r.id
+          AND m.id > COALESCE(crm.last_read_message_id, 0)
+          AND m.created_at >= crm.joined_at
+          AND m.sender_id <> ?
+        ORDER BY m.id DESC
+        LIMIT 1
+      ) AS preview_text,
+      (
+        SELECT u.nickname
+        FROM messages m
+        INNER JOIN users u ON u.id = m.sender_id
+        WHERE m.room_id = r.id
+          AND m.id > COALESCE(crm.last_read_message_id, 0)
+          AND m.created_at >= crm.joined_at
+          AND m.sender_id <> ?
+        ORDER BY m.id DESC
+        LIMIT 1
+      ) AS preview_from
     FROM chat_rooms r
     INNER JOIN chat_room_members crm ON crm.room_id = r.id
     WHERE crm.user_id = ? AND crm.left_at IS NULL
     ORDER BY r.created_at DESC
   `;
 
-  const [rows] = await pool.query(sql, [ROOM_TYPE.DM, userId, userId]);
+  const [rows] = await pool.query(sql, [
+    ROOM_TYPE.DM,
+    userId,
+    userId,
+    userId,
+    userId,
+    userId,
+    userId,
+  ]);
 
-  return rows.map((row) => ({
-    id: row.id,
-    type: row.type,
-    name: row.display_name,
-  }));
+  return rows
+    .map((row) => {
+      const unreadCount = Number(row.unread_count) || 0;
+      return {
+        id: row.id,
+        type: row.type,
+        name: row.display_name,
+        unreadCount,
+        unreadPreview:
+          unreadCount > 0
+            ? formatMessagePreview(row.preview_type, row.preview_from, row.preview_text)
+            : null,
+      };
+    })
+    .sort((a, b) => {
+      const aUnread = a.unreadCount > 0 ? 1 : 0;
+      const bUnread = b.unreadCount > 0 ? 1 : 0;
+      if (aUnread !== bUnread) return bUnread - aUnread;
+      return Number(b.id) - Number(a.id);
+    });
 }
 
 async function findExistingDmRoom(userId, otherUserId) {
@@ -77,7 +139,7 @@ async function isRoomMember(roomId, userId) {
 async function restoreDmMembership(roomId, userId) {
   await pool.query(
     `UPDATE chat_room_members
-     SET left_at = NULL, joined_at = NOW()
+     SET left_at = NULL, joined_at = NOW(), last_read_message_id = 0
      WHERE room_id = ? AND user_id = ? AND left_at IS NOT NULL`,
     [roomId, userId],
   );
@@ -259,6 +321,42 @@ function formatMessageTime(createdAt) {
   });
 }
 
+function formatMessagePreview(type, from, text) {
+  if (type === MESSAGE_TYPE.SYSTEM_JOIN) {
+    return `${from}님이 입장했습니다.`;
+  }
+  if (type === MESSAGE_TYPE.SYSTEM_LEAVE) {
+    return `${from}님이 퇴장했습니다.`;
+  }
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return "";
+  return trimmed.length > 42 ? `${trimmed.slice(0, 42)}…` : trimmed;
+}
+
+async function markRoomAsRead(roomId, userId) {
+  const [memberRows] = await pool.query(
+    "SELECT joined_at FROM chat_room_members WHERE room_id = ? AND user_id = ? AND left_at IS NULL LIMIT 1",
+    [roomId, userId],
+  );
+  if (!memberRows.length) return;
+
+  const joinedAt = memberRows[0].joined_at;
+
+  const [maxRows] = await pool.query(
+    `SELECT COALESCE(MAX(id), 0) AS max_id
+     FROM messages
+     WHERE room_id = ? AND created_at >= ?`,
+    [roomId, joinedAt],
+  );
+
+  await pool.query(
+    `UPDATE chat_room_members
+     SET last_read_message_id = ?
+     WHERE room_id = ? AND user_id = ? AND left_at IS NULL`,
+    [maxRows[0].max_id, roomId, userId],
+  );
+}
+
 function mapMessageRow(row) {
   return {
     id: row.id,
@@ -416,5 +514,7 @@ module.exports = {
   listJoinableGroups,
   joinGroup,
   leaveRoom,
+  markRoomAsRead,
   formatMessageTime,
+  formatMessagePreview,
 };

@@ -21,10 +21,15 @@
               <p class="muted roomlist__empty">참여 중인 채팅방이 없습니다.</p>
             <% } %>
             <% (rooms || []).forEach(function(r){ %>
-              <a class="roomlist__item <%= selectedRoomId == r.id ? 'is-active' : '' %>"
+              <a class="roomlist__item<%= selectedRoomId == r.id ? ' is-active' : '' %><%= r.unreadCount > 0 && selectedRoomId != r.id ? ' roomlist__item--unread' : '' %>"
                 href="/dashboard?roomId=<%= r.id %>"
-                data-room-id="<%= r.id %>">
-                <%= r.type === 'DM' ? '' : '# ' %><%= r.name %>
+                data-room-id="<%= r.id %>"
+                data-unread-count="<%= r.unreadCount || 0 %>">
+                <span class="roomlist__item-body">
+                  <span class="roomlist__item-name"><%= r.type === 'DM' ? '' : '# ' %><%= r.name %></span>
+                  <span class="roomlist__item-preview"<% if (!r.unreadPreview) { %> hidden<% } %>><%= r.unreadPreview || '' %></span>
+                </span>
+                <span class="roomlist__badge"<% if (!(r.unreadCount > 0)) { %> hidden<% } %> aria-label="읽지 않은 메시지"><%= r.unreadCount > 99 ? '99+' : (r.unreadCount || '') %></span>
               </a>
             <% }) %>
           </nav>
@@ -127,7 +132,10 @@
       window.__DASHBOARD__ = {
         roomId: <%- JSON.stringify(selectedRoomId || null) %>,
         currentUser: <%- JSON.stringify(user.name) %>,
-        lastMessageId: <%- JSON.stringify((messages && messages.length ? messages[messages.length - 1].id : 0)) %>
+        lastMessageId: <%- JSON.stringify((messages && messages.length ? messages[messages.length - 1].id : 0)) %>,
+        rooms: <%- JSON.stringify((rooms || []).map(function(r) {
+          return { id: r.id, type: r.type, name: r.name, unreadCount: r.unreadCount || 0, unreadPreview: r.unreadPreview || null };
+        })) %>
       };
     </script>
     <script src="/js/dashboard.js"></script>

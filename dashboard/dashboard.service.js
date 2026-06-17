@@ -8,6 +8,15 @@ async function getDashboardViewData(userId, roomId) {
     return null;
   }
 
+  if (roomId) {
+    const numericRoomId = Number(roomId);
+    const isMember = await chatService.isRoomMember(numericRoomId, userId);
+
+    if (isMember) {
+      await chatService.markRoomAsRead(numericRoomId, userId);
+    }
+  }
+
   const rooms = await chatService.listRoomsForUser(userId);
   const joinableGroups = await chatService.listJoinableGroups(userId);
   let messages = [];

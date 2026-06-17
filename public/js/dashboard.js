@@ -2,6 +2,9 @@ const roomId = window.__DASHBOARD__.roomId;
 const currentUser = window.__DASHBOARD__.currentUser;
 let lastMessageId = window.__DASHBOARD__.lastMessageId || 0;
 
+const unreadByRoom = new Map();
+const seenMessageIds = new Set();
+
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -30,6 +33,60 @@ function buildMessageHtml(msg) {
     </article>`;
 }
 
+function formatMessagePreview(message) {
+  if (message.type === "SYSTEM_JOIN") {
+    return `${message.from}님이 입장했습니다.`;
+  }
+  if (message.type === "SYSTEM_LEAVE") {
+    return `${message.from}님이 퇴장했습니다.`;
+  }
+  const text = String(message.text || "").trim();
+  if (!text) return "";
+  return text.length > 42 ? `${text.slice(0, 42)}…` : text;
+}
+
+function applyUnreadState($item, unreadCount, preview) {
+  const count = Number(unreadCount) || 0;
+  if (count <= 0) {
+    $item.removeClass("roomlist__item--unread");
+    $item.attr("data-unread-count", "0");
+    $item.find(".roomlist__item-preview").prop("hidden", true).text("");
+    $item.find(".roomlist__badge").prop("hidden", true).text("");
+    return;
+  }
+
+  $item.addClass("roomlist__item--unread");
+  $item.attr("data-unread-count", String(count));
+  $item.find(".roomlist__item-preview").text(preview || "").prop("hidden", false);
+  $item
+    .find(".roomlist__badge")
+    .text(count > 99 ? "99+" : String(count))
+    .prop("hidden", false);
+}
+
+function buildRoomListItemHtml(room, isActive) {
+  const id = Number(room.id);
+  const prefix = room.type === "DM" ? "" : "# ";
+  const unreadCount = Number(room.unreadCount) || 0;
+  const unreadClass = unreadCount > 0 && !isActive ? " roomlist__item--unread" : "";
+  const previewHtml = room.unreadPreview
+    ? `<span class="roomlist__item-preview">${escapeHtml(room.unreadPreview)}</span>`
+    : '<span class="roomlist__item-preview" hidden></span>';
+  const badgeHtml =
+    unreadCount > 0
+      ? `<span class="roomlist__badge" aria-label="읽지 않은 메시지">${unreadCount > 99 ? "99+" : unreadCount}</span>`
+      : '<span class="roomlist__badge" hidden aria-label="읽지 않은 메시지"></span>';
+
+  return `
+    <a class="roomlist__item${isActive ? " is-active" : ""}${unreadClass}" href="/dashboard?roomId=${id}" data-room-id="${id}" data-unread-count="${unreadCount}">
+      <span class="roomlist__item-body">
+        <span class="roomlist__item-name">${escapeHtml(prefix + room.name)}</span>
+        ${previewHtml}
+      </span>
+      ${badgeHtml}
+    </a>`;
+}
+
 const $roomList = $(".sidebar .roomlist").first();
 const $messages = $("#messages");
 const $form = $("#messageForm");
@@ -49,10 +106,62 @@ function appendMessage(msg) {
     lastMessageId = msg.id;
   }
   scrollToBottom();
+  markCurrentRoomRead();
+}
+
+function getRoomListItem(targetRoomId) {
+  return $roomList.find(`[data-room-id="${Number(targetRoomId)}"]`);
+}
+
+function markCurrentRoomRead() {
+  if (!roomId) return;
+
+  const id = Number(roomId);
+  unreadByRoom.delete(id);
+  applyUnreadState(getRoomListItem(id), 0, "");
+  socket.emit("room:read", { roomId: id });
+}
+
+function updateRoomNotification(targetRoomId, message) {
+  const id = Number(targetRoomId);
+  if (id === Number(roomId)) return;
+
+  const preview = formatMessagePreview(message);
+  if (!preview) return;
+
+  const $item = getRoomListItem(id);
+  const prevCount = Number($item.attr("data-unread-count")) || unreadByRoom.get(id)?.count || 0;
+  const count = prevCount + 1;
+  unreadByRoom.set(id, { count, preview });
+
+  if (!$item.length) return;
+
+  applyUnreadState($item, count, preview);
+  $roomList.prepend($item);
+}
+
+function handleIncomingMessage(msgRoomId, message, room) {
+  if (!message) return;
+  if (message.id) {
+    if (seenMessageIds.has(message.id)) return;
+    seenMessageIds.add(message.id);
+  }
+
+  if (room) {
+    addRoomToSidebar(room);
+  }
+
+  if (Number(msgRoomId) === Number(roomId)) {
+    appendMessage(message);
+    return;
+  }
+
+  updateRoomNotification(msgRoomId, message);
 }
 
 function removeRoomFromSidebar(targetRoomId) {
   const id = Number(targetRoomId);
+  unreadByRoom.delete(id);
   $roomList.find(`[data-room-id="${id}"]`).remove();
   if (!$roomList.find(".roomlist__item").length) {
     $roomList.find(".roomlist__empty").remove();
@@ -65,15 +174,38 @@ function removeRoomFromSidebar(targetRoomId) {
 function addRoomToSidebar(room) {
   if (!room || !room.id) return;
   const id = Number(room.id);
-  if ($roomList.find(`[data-room-id="${id}"]`).length) return;
+  if (getRoomListItem(id).length) return;
 
   $roomList.find(".roomlist__empty").remove();
-  const prefix = room.type === "DM" ? "" : "# ";
   const isActive = roomId && Number(roomId) === id;
-  const $link = $(
-    `<a class="roomlist__item${isActive ? " is-active" : ""}" href="/dashboard?roomId=${id}" data-room-id="${id}">${escapeHtml(prefix + room.name)}</a>`,
-  );
-  $roomList.prepend($link);
+  const unreadCount = isActive ? 0 : Number(room.unreadCount) || 0;
+  const roomData = { ...room, unreadCount, unreadPreview: isActive ? null : room.unreadPreview };
+  $roomList.prepend(buildRoomListItemHtml(roomData, isActive));
+
+  if (unreadCount > 0 && room.unreadPreview) {
+    unreadByRoom.set(id, { count: unreadCount, preview: room.unreadPreview });
+  }
+}
+
+function initRoomListUnread() {
+  const rooms = window.__DASHBOARD__.rooms || [];
+  for (const room of rooms) {
+    const id = Number(room.id);
+    if (id === Number(roomId)) continue;
+
+    const count = Number(room.unreadCount) || 0;
+    if (count <= 0) continue;
+
+    unreadByRoom.set(id, {
+      count,
+      preview: room.unreadPreview || "",
+    });
+
+    const $item = getRoomListItem(id);
+    if ($item.length) {
+      applyUnreadState($item, count, room.unreadPreview);
+    }
+  }
 }
 
 // 대시보드 전역 소켓 (usi 쿠키로 인증)
@@ -89,6 +221,7 @@ socket.on("connect", () => {
         showAlertModal(res?.message || "채팅방 참여에 실패했습니다.");
       }
     });
+    markCurrentRoomRead();
   }
 });
 
@@ -104,25 +237,19 @@ socket.on("disconnect", (reason) => {
   console.warn("[socket] disconnected:", reason);
 });
 
-// 방을 열고 있을 때: room 채널 수신
-socket.on("message:new", ({ message }) => {
-  appendMessage(message);
+socket.on("message:new", ({ roomId: msgRoomId, message }) => {
+  handleIncomingMessage(msgRoomId, message);
 });
 
-// 다른 방이거나 방을 아직 열지 않았을 때: user 채널 수신
 socket.on("message:incoming", ({ roomId: incomingRoomId, message, room }) => {
-  
-  if (room) {
-    addRoomToSidebar(room);
-  }
-  if (Number(incomingRoomId) === Number(roomId)) {
-    appendMessage(message);
-  }
+  handleIncomingMessage(incomingRoomId, message, room);
 });
 
 socket.on("room:added", ({ room }) => {
-  console.log("room:added room: ", room);
   addRoomToSidebar(room);
+  if (room?.id) {
+    socket.emit("room:join", { roomId: room.id });
+  }
 });
 
 socket.on("room:left", ({ roomId: leftRoomId }) => {
@@ -131,6 +258,8 @@ socket.on("room:left", ({ roomId: leftRoomId }) => {
     window.location.href = "/dashboard";
   }
 });
+
+initRoomListUnread();
 
 if (roomId) {
   scrollToBottom();
