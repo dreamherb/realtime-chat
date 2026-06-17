@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { encryptEmail, hashPassword, verifyPassword } = require("./auth.crypto");
+const { SESSION_COOKIE } = require("./auth.middleware");
 const authService = require("./auth.service");
 
 // GET /auth/login
@@ -152,9 +153,45 @@ async function postSignup(req, res, next) {
   }
 }
 
+// GET /auth/logout
+function getLogout(req, res) {
+  res.clearCookie(SESSION_COOKIE, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  });
+  return res.redirect("/auth/login");
+}
+
+// POST /auth/logout
+async function postLogout(req, res) {
+  try {
+    res.clearCookie(SESSION_COOKIE, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+    return res.status(200).json({
+      success: true,
+      message: "로그아웃되었습니다.",
+      redirectUrl: "/",
+    });
+  } catch (error) {
+    console.error("ERROR IN POST /auth/logout : ", error.stack);
+    return res.status(500).json({
+      success: false,
+      message: "로그아웃 처리 중 오류가 발생했습니다.",
+    });
+  }
+}
+
 module.exports = {
   getLogin,
   getSignup,
+  getLogout,
   postLogin,
   postSignup,
+  postLogout,
 };

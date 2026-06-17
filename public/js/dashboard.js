@@ -331,6 +331,34 @@ $(document).on("click", ".js-leave-room", function () {
   });
 });
 
+$(document).on("click", ".js-logout", function () {
+  const $btn = $(this);
+  $btn.prop("disabled", true);
+
+  $.ajax({
+    url: "/auth/logout",
+    type: "POST",
+    contentType: "application/json",
+    data: JSON.stringify({}),
+    success: function (data) {
+      if (!data.success) {
+        $btn.prop("disabled", false);
+        return showAlertModal(data.message || "로그아웃에 실패했습니다.");
+      }
+      window.location.href = data.redirectUrl || "/";
+    },
+    error: function (xhr) {
+      $btn.prop("disabled", false);
+      try {
+        const res = xhr.responseJSON || JSON.parse(xhr.responseText || "{}");
+        showAlertModal(res.message || "로그아웃에 실패했습니다.");
+      } catch {
+        showAlertModal("로그아웃 처리 중 오류가 발생했습니다.");
+      }
+    },
+  });
+});
+
 // 그룹 참여 버튼 (roomId 없어도 항상 활성)
 $(document).on("click", ".js-join-group", function () {
   const $btn = $(this);

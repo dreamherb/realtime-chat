@@ -6,6 +6,7 @@ const passwordResetMiddleware = require("./password-reset.middleware");
 
 // 뷰 렌더링
 router.get("/login", authController.getLogin);
+router.get("/logout", authController.getLogout);
 router.get("/signup", authController.getSignup);
 
 router.get(
@@ -17,6 +18,7 @@ router.get("/forgot", passwordResetController.getForgotPage);
 
 // API 엔드포인트
 router.post("/login", authController.postLogin);
+router.post("/logout", authController.postLogout);
 router.post("/signup", authController.postSignup);
 
 router.post("/forgot/send-code", passwordResetController.postSendForgotCode);
