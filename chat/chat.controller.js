@@ -3,6 +3,7 @@ const { resolveSessionUser } = require("../auth/auth.session");
 const authService = require("../auth/auth.service");
 const chatService = require("./chat.service");
 const {
+  notifyDmRoomCreated,
   notifyRoomMemberJoined,
   notifyRoomMemberLeft,
 } = require("./chat.realtime");
@@ -66,6 +67,10 @@ const chatController = {
             success: false,
             message: "자기 자신과는 채팅방을 만들 수 없습니다.",
           });
+        }
+
+        if (!result.existing || result.targetRestored) {
+          await notifyDmRoomCreated(result.roomId, targetUser.id);
         }
 
         return res.status(result.existing ? 200 : 201).json({

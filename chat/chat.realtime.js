@@ -122,6 +122,22 @@ function bindHandlers(io, socket) {
         message: result.message,
       });
 
+      const { peerId } = await chatService.ensureDmPeerForMessage(
+        numericRoomId,
+        user.id,
+      );
+      if (peerId) {
+        const room = await chatService.getRoomSummaryForUser(
+          numericRoomId,
+          peerId,
+        );
+        io.to(userChannel(peerId)).emit("message:incoming", {
+          roomId: numericRoomId,
+          message: result.message,
+          room,
+        });
+      }
+
       ack?.({ ok: true, message: result.message });
     } catch (error) {
       console.error("[socket] message:send error:", error.stack);
@@ -175,6 +191,24 @@ async function notifyRoomMemberJoined(roomId, actorId) {
  *    (DM은 announce=false로 호출하여 시스템 메시지를 띄우지 않음)
  * 3) 퇴장자의 모든 탭에 room:left push → 자동 /dashboard 이동
  */
+/**
+ * 새 DM 방 생성 시 수신자에게 사이드바 갱신용 이벤트를 push합니다.
+ */
+async function notifyDmRoomCreated(roomId, recipientUserId) {
+  if (!ioInstance) return;
+  try {
+    const room = await chatService.getRoomSummaryForUser(
+      roomId,
+      recipientUserId,
+    );
+    if (!room) return;
+
+    ioInstance.to(userChannel(recipientUserId)).emit("room:added", { room });
+  } catch (error) {
+    console.error("[socket] notifyDmRoomCreated error:", error.stack);
+  }
+}
+
 async function notifyRoomMemberLeft(userId, roomId, { announce = true } = {}) {
   if (!ioInstance) return;
   const userRoom = userChannel(userId);
@@ -202,6 +236,7 @@ async function notifyRoomMemberLeft(userId, roomId, { announce = true } = {}) {
 module.exports = {
   attachRealtime,
   getIo,
+  notifyDmRoomCreated,
   notifyRoomMemberJoined,
   notifyRoomMemberLeft,
 };

@@ -125,11 +125,17 @@ async function createDmRoom(creatorId, targetUserId) {
   const existingRoomId = await findExistingDmRoom(creatorId, targetUserId);
   if (existingRoomId) {
     // 내가 나간 상태라면 조용히 복원 (joined_at 갱신으로 떠난 기간 메시지 숨김)
-    const stillActive = await isRoomMember(existingRoomId, creatorId);
-    if (!stillActive) {
+    if (!(await isRoomMember(existingRoomId, creatorId))) {
       await restoreDmMembership(existingRoomId, creatorId);
     }
-    return { ok: true, roomId: existingRoomId, existing: true };
+
+    let targetRestored = false;
+    if (!(await isRoomMember(existingRoomId, targetUserId))) {
+      await restoreDmMembership(existingRoomId, targetUserId);
+      targetRestored = true;
+    }
+
+    return { ok: true, roomId: existingRoomId, existing: true, targetRestored };
   }
 
   const roomId = await createRoomWithMembers({
@@ -348,6 +354,50 @@ async function getRoomDisplayName(roomId, userId) {
   return room?.name ?? null;
 }
 
+async function getRoomSummaryForUser(roomId, userId) {
+  const rooms = await listRoomsForUser(userId);
+  return rooms.find((r) => r.id === Number(roomId)) ?? null;
+}
+
+async function getDmPeerUserId(roomId, userId) {
+  const sql = `
+    SELECT crm.user_id
+    FROM chat_rooms r
+    INNER JOIN chat_room_members crm
+      ON crm.room_id = r.id AND crm.left_at IS NULL
+    WHERE r.id = ? AND r.type = ? AND crm.user_id <> ?
+    LIMIT 1
+  `;
+  const [rows] = await pool.query(sql, [roomId, ROOM_TYPE.DM, userId]);
+  return rows[0]?.user_id ?? null;
+}
+
+/**
+ * DM 메시지 전송 시 상대가 나간 상태면 멤버십을 복원합니다.
+ * @returns {{ peerId: number|null, peerRestored: boolean }}
+ */
+async function ensureDmPeerForMessage(roomId, senderId) {
+  const sql = `
+    SELECT crm.user_id, (crm.left_at IS NOT NULL) AS has_left
+    FROM chat_rooms r
+    INNER JOIN chat_room_members crm ON crm.room_id = r.id
+    WHERE r.id = ? AND r.type = ? AND crm.user_id <> ?
+    LIMIT 1
+  `;
+  const [rows] = await pool.query(sql, [roomId, ROOM_TYPE.DM, senderId]);
+  const peer = rows[0];
+  if (!peer) {
+    return { peerId: null, peerRestored: false };
+  }
+
+  if (peer.has_left) {
+    await restoreDmMembership(roomId, peer.user_id);
+    return { peerId: peer.user_id, peerRestored: true };
+  }
+
+  return { peerId: peer.user_id, peerRestored: false };
+}
+
 module.exports = {
   ROOM_TYPE,
   MESSAGE_TYPE,
@@ -358,6 +408,9 @@ module.exports = {
   createGroupRoom,
   getMessagesForRoom,
   getRoomDisplayName,
+  getRoomSummaryForUser,
+  getDmPeerUserId,
+  ensureDmPeerForMessage,
   createMessage,
   createSystemMessage,
   listJoinableGroups,

@@ -22,7 +22,8 @@
             <% } %>
             <% (rooms || []).forEach(function(r){ %>
               <a class="roomlist__item <%= selectedRoomId == r.id ? 'is-active' : '' %>"
-                href="/dashboard?roomId=<%= r.id %>">
+                href="/dashboard?roomId=<%= r.id %>"
+                data-room-id="<%= r.id %>">
                 <%= r.type === 'DM' ? '' : '# ' %><%= r.name %>
               </a>
             <% }) %>

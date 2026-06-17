@@ -30,65 +30,110 @@ function buildMessageHtml(msg) {
     </article>`;
 }
 
-// 채팅방 실시간 통신 (roomId 있을 때만)
-if (roomId) {
-  const $messages = $("#messages");
-  const $form = $("#messageForm");
-  const $input = $("#messageText");
+const $roomList = $(".sidebar .roomlist").first();
+const $messages = $("#messages");
+const $form = $("#messageForm");
+const $input = $("#messageText");
 
-  function scrollToBottom() {
-    $messages.scrollTop($messages[0].scrollHeight);
+function scrollToBottom() {
+  if (!$messages.length) return;
+  $messages.scrollTop($messages[0].scrollHeight);
+}
+
+function appendMessage(msg) {
+  if (!msg || !$messages.length) return;
+  if (msg.id && msg.id <= lastMessageId) return;
+  $messages.find("p.muted").remove();
+  $messages.append(buildMessageHtml(msg));
+  if (msg.id > lastMessageId) {
+    lastMessageId = msg.id;
   }
-
-  function appendMessage(msg) {
-    if (!msg || (msg.id && msg.id <= lastMessageId)) return;
-    $messages.find("p.muted").remove();
-    $messages.append(buildMessageHtml(msg));
-    if (msg.id > lastMessageId) {
-      lastMessageId = msg.id;
-    }
-    scrollToBottom();
-  }
-
   scrollToBottom();
+}
 
-  // socket.io 연결 (usi 쿠키로 인증)
-  const socket = io({
-    transports: ["websocket", "polling"],
-    withCredentials: true,
-  });
+function removeRoomFromSidebar(targetRoomId) {
+  const id = Number(targetRoomId);
+  $roomList.find(`[data-room-id="${id}"]`).remove();
+  if (!$roomList.find(".roomlist__item").length) {
+    $roomList.find(".roomlist__empty").remove();
+    $roomList.prepend(
+      '<p class="muted roomlist__empty">참여 중인 채팅방이 없습니다.</p>',
+    );
+  }
+}
 
-  socket.on("connect", () => {
+function addRoomToSidebar(room) {
+  if (!room || !room.id) return;
+  const id = Number(room.id);
+  if ($roomList.find(`[data-room-id="${id}"]`).length) return;
+
+  $roomList.find(".roomlist__empty").remove();
+  const prefix = room.type === "DM" ? "" : "# ";
+  const isActive = roomId && Number(roomId) === id;
+  const $link = $(
+    `<a class="roomlist__item${isActive ? " is-active" : ""}" href="/dashboard?roomId=${id}" data-room-id="${id}">${escapeHtml(prefix + room.name)}</a>`,
+  );
+  $roomList.prepend($link);
+}
+
+// 대시보드 전역 소켓 (usi 쿠키로 인증)
+const socket = io({
+  transports: ["websocket", "polling"],
+  withCredentials: true,
+});
+
+socket.on("connect", () => {
+  if (roomId) {
     socket.emit("room:join", { roomId }, (res) => {
       if (!res?.ok) {
         showAlertModal(res?.message || "채팅방 참여에 실패했습니다.");
       }
     });
-  });
+  }
+});
 
-  socket.on("connect_error", (err) => {
-    if (err && err.message === "UNAUTHORIZED") {
-      window.location.href = "/";
-      return;
-    }
-    console.error("[socket] connect_error:", err?.message || err);
-  });
+socket.on("connect_error", (err) => {
+  if (err && err.message === "UNAUTHORIZED") {
+    window.location.href = "/";
+    return;
+  }
+  console.error("[socket] connect_error:", err?.message || err);
+});
 
-  socket.on("disconnect", (reason) => {
-    console.warn("[socket] disconnected:", reason);
-  });
+socket.on("disconnect", (reason) => {
+  console.warn("[socket] disconnected:", reason);
+});
 
-  // 일반 메시지 + 시스템 메시지(입장/퇴장) 모두 message:new로 수신
-  socket.on("message:new", ({ message }) => {
+// 방을 열고 있을 때: room 채널 수신
+socket.on("message:new", ({ message }) => {
+  appendMessage(message);
+});
+
+// 다른 방이거나 방을 아직 열지 않았을 때: user 채널 수신
+socket.on("message:incoming", ({ roomId: incomingRoomId, message, room }) => {
+  
+  if (room) {
+    addRoomToSidebar(room);
+  }
+  if (Number(incomingRoomId) === Number(roomId)) {
     appendMessage(message);
-  });
+  }
+});
 
-  // 다른 탭/디바이스에서 이 방을 나갔을 때 자동으로 대시보드로 이동
-  socket.on("room:left", ({ roomId: leftRoomId }) => {
-    if (Number(leftRoomId) === Number(roomId)) {
-      window.location.href = "/dashboard";
-    }
-  });
+socket.on("room:added", ({ room }) => {
+  console.log("room:added room: ", room);
+  addRoomToSidebar(room);
+});
+
+socket.on("room:left", ({ roomId: leftRoomId }) => {
+  removeRoomFromSidebar(leftRoomId);
+  if (Number(leftRoomId) === Number(roomId)) {
+    window.location.href = "/dashboard";
+  }
+});
+
+if (roomId) {
+  scrollToBottom();
 
   $form.on("submit", function (e) {
     e.preventDefault();
@@ -115,11 +160,11 @@ if (roomId) {
       $form.trigger("submit");
     }
   });
-
-  $(window).on("beforeunload", function () {
-    socket.disconnect();
-  });
 }
+
+$(window).on("beforeunload", function () {
+  socket.disconnect();
+});
 
 // 채팅방 나가기
 $(document).on("click", ".js-leave-room", function () {
