@@ -105,14 +105,14 @@
 
           <% if (selectedRoomId) { %>
           <form class="chat__composer" id="messageForm" data-room-id="<%= selectedRoomId %>">
-            <input
-              class="input input--grow"
-              type="text"
+            <textarea
+              class="input input--grow composer-input"
               name="text"
               id="messageText"
               placeholder="메시지를 입력하세요"
               autocomplete="off"
-            />
+              rows="1"
+            ></textarea>
             <button class="btn btn--primary" type="submit">Send</button>
           </form>
           <% } %>

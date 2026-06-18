@@ -91,6 +91,29 @@ const $roomList = $(".sidebar .roomlist").first();
 const $messages = $("#messages");
 const $form = $("#messageForm");
 const $input = $("#messageText");
+const COMPOSER_MAX_LINES = 5;
+
+function resizeComposer(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  const style = getComputedStyle(el);
+  const lineHeight = parseFloat(style.lineHeight);
+  const paddingTop = parseFloat(style.paddingTop);
+  const paddingBottom = parseFloat(style.paddingBottom);
+  const maxHeight = lineHeight * COMPOSER_MAX_LINES + paddingTop + paddingBottom;
+  const nextHeight = Math.min(el.scrollHeight, maxHeight);
+  el.style.height = `${nextHeight}px`;
+  el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+}
+
+function resetComposer() {
+  const el = $input[0];
+  if (!el) return;
+  $input.val("");
+  el.style.height = "auto";
+  el.style.overflowY = "hidden";
+  resizeComposer(el);
+}
 
 function scrollToBottom() {
   if (!$messages.length) return;
@@ -279,8 +302,12 @@ if (roomId) {
       }
 
       appendMessage(res.message);
-      $input.val("");
+      resetComposer();
     });
+  });
+
+  $input.on("input", function () {
+    resizeComposer(this);
   });
 
   $input.on("keydown", function (e) {
@@ -289,6 +316,8 @@ if (roomId) {
       $form.trigger("submit");
     }
   });
+
+  resizeComposer($input[0]);
 }
 
 $(window).on("beforeunload", function () {

@@ -392,15 +392,25 @@ body {
 }
 
 .msg__body {
-  font-size: 14px
+  font-size: 14px;
+  white-space: pre-line;
+  word-break: break-word;
 }
 
 .chat__composer {
   display: flex;
   gap: 12px;
-  align-items: center;
+  align-items: flex-end;
   padding: 16px;
   border-top: 1px solid var(--line);
+}
+
+.composer-input {
+  resize: none;
+  overflow-y: hidden;
+  min-height: 40px;
+  line-height: 1.4;
+  font-family: inherit;
 }
 
 /* Responsive */
