@@ -52,6 +52,7 @@ function applyUnreadState($item, unreadCount, preview) {
     $item.attr("data-unread-count", "0");
     $item.find(".roomlist__item-preview").prop("hidden", true).text("");
     $item.find(".roomlist__badge").prop("hidden", true).text("");
+    syncTitleBadge();
     return;
   }
 
@@ -62,6 +63,13 @@ function applyUnreadState($item, unreadCount, preview) {
     .find(".roomlist__badge")
     .text(count > 99 ? "99+" : String(count))
     .prop("hidden", false);
+  syncTitleBadge();
+}
+
+function syncTitleBadge() {
+  if (window.ChatNotifications) {
+    ChatNotifications.updateTitleBadge(unreadByRoom);
+  }
 }
 
 function buildRoomListItemHtml(room, isActive) {
@@ -176,10 +184,17 @@ function handleIncomingMessage(msgRoomId, message, room) {
 
   if (Number(msgRoomId) === Number(roomId)) {
     appendMessage(message);
+    notifyIncomingMessage(msgRoomId, message, room);
     return;
   }
 
   updateRoomNotification(msgRoomId, message);
+  notifyIncomingMessage(msgRoomId, message, room);
+}
+
+function notifyIncomingMessage(msgRoomId, message, room) {
+  if (!window.ChatNotifications) return;
+  ChatNotifications.show(msgRoomId, message, room);
 }
 
 function removeRoomFromSidebar(targetRoomId) {
@@ -334,7 +349,21 @@ socket.on("room:left", ({ roomId: leftRoomId }) => {
   }
 });
 
+if (window.ChatNotifications) {
+  ChatNotifications.init({
+    currentUser,
+    currentRoomId: roomId,
+    baseTitle: document.title,
+    getRoomName(targetRoomId) {
+      const $item = getRoomListItem(targetRoomId);
+      return $item.find(".roomlist__item-name").text().trim() || "새 메시지";
+    },
+    formatPreview: formatMessagePreview,
+  });
+}
+
 initRoomListUnread();
+syncTitleBadge();
 
 if (roomId) {
   scrollToBottom();

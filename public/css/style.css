@@ -87,6 +87,32 @@ body {
   width: 100%
 }
 
+.notifications-card__section + .notifications-card__section {
+  margin-top: 0;
+}
+
+.notifications-card__title {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.notifications-card__desc {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.notifications-card__status {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.notifications-card__divider {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 24px 0;
+}
+
 .form {
   display: flex;
   flex-direction: column;

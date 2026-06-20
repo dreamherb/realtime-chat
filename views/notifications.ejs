@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <%- include('include/header', { title: "알림 설정" }) %>
+
+  <body>
+    <main class="page">
+      <section class="section">
+        <h1 class="logo">알림 설정</h1>
+
+        <div class="card card--auth notifications-card">
+          <div class="notifications-card__section">
+            <h2 class="notifications-card__title">데스크톱 알림</h2>
+            <p class="muted notifications-card__desc">
+              다른 탭을 보거나 화면이 잠겨 있을 때 새 메시지를 OS 알림으로 받습니다.
+            </p>
+            <p class="notifications-card__status" id="desktopStatus"></p>
+            <div class="row row--gap-sm" style="margin-top: 1rem">
+              <button type="button" class="btn btn--primary" id="enableDesktopBtn">
+                알림 켜기
+              </button>
+              <button type="button" class="btn btn--secondary" id="disableDesktopBtn" hidden>
+                알림 끄기
+              </button>
+            </div>
+          </div>
+
+          <hr class="notifications-card__divider" />
+
+          <div class="notifications-card__section">
+            <h2 class="notifications-card__title">푸시 알림 (모바일·백그라운드)</h2>
+            <p class="muted notifications-card__desc">
+              브라우저가 백그라운드이거나 모바일에서도 알림을 받을 수 있습니다.
+              서버에 VAPID 키가 설정되어 있어야 활성화됩니다.
+            </p>
+            <p class="notifications-card__status" id="pushStatus"></p>
+            <div class="row row--gap-sm" style="margin-top: 1rem">
+              <button type="button" class="btn btn--primary" id="enablePushBtn" hidden>
+                푸시 구독
+              </button>
+              <button type="button" class="btn btn--secondary" id="disablePushBtn" hidden>
+                푸시 해제
+              </button>
+            </div>
+          </div>
+
+          <div class="row row--gap-sm" style="margin-top: 1.5rem">
+            <a class="btn btn--secondary" href="/dashboard">대시보드로 돌아가기</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <%- include('include/footer') %>
+    <div class="modal-overlay" id="alertModalOverlay">
+      <div class="modal" id="alertModal">
+        <h2>Notice</h2>
+        <p id="alertModalMsg"></p>
+        <button onclick="closeAlertModal()">확인</button>
+      </div>
+    </div>
+
+    <script>
+      window.__NOTIFICATIONS__ = {
+        pushConfigured: <%- JSON.stringify(Boolean(pushConfigured)) %>
+      };
+    </script>
+    <script src="/js/common.js"></script>
+    <script src="/js/chat-notifications.js"></script>
+    <script src="/js/notifications-settings.js"></script>
+  </body>
+</html>
