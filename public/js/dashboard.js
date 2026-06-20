@@ -194,11 +194,59 @@ function removeRoomFromSidebar(targetRoomId) {
   }
 }
 
+function ensureJoinableSection() {
+  let $section = $(".roomlist--joinable");
+  if ($section.length) return $section;
+
+  const $sidebar = $(".sidebar");
+  const $title = $('<h3 class="roomlist__section-title">참여 가능한 그룹</h3>');
+  $section = $('<nav class="roomlist roomlist--joinable"></nav>');
+  $sidebar.append($title).append($section);
+  return $section;
+}
+
+function buildJoinableGroupHtml(group) {
+  const id = Number(group.id);
+  return `
+    <div class="roomlist__joinable-item" data-room-id="${id}">
+      <span class="roomlist__joinable-name"># ${escapeHtml(group.name)}</span>
+      <button
+        class="btn btn--secondary btn--xs js-join-group"
+        type="button"
+        data-room-id="${id}"
+      >참여</button>
+    </div>`;
+}
+
+function removeJoinableGroupFromSidebar(targetRoomId) {
+  const id = Number(targetRoomId);
+  const $section = $(".roomlist--joinable");
+  if (!$section.length) return;
+
+  $section.find(`[data-room-id="${id}"]`).remove();
+  if (!$section.find(".roomlist__joinable-item").length) {
+    $section.prev(".roomlist__section-title").remove();
+    $section.remove();
+  }
+}
+
+function addJoinableGroupToSidebar(group) {
+  if (!group || !group.id) return;
+  const id = Number(group.id);
+  if (getRoomListItem(id).length) return;
+
+  const $section = ensureJoinableSection();
+  if ($section.find(`[data-room-id="${id}"]`).length) return;
+
+  $section.prepend(buildJoinableGroupHtml(group));
+}
+
 function addRoomToSidebar(room) {
   if (!room || !room.id) return;
   const id = Number(room.id);
   if (getRoomListItem(id).length) return;
 
+  removeJoinableGroupFromSidebar(id);
   $roomList.find(".roomlist__empty").remove();
   const isActive = roomId && Number(roomId) === id;
   const unreadCount = isActive ? 0 : Number(room.unreadCount) || 0;
@@ -273,6 +321,10 @@ socket.on("room:added", ({ room }) => {
   if (room?.id) {
     socket.emit("room:join", { roomId: room.id });
   }
+});
+
+socket.on("group:joinable", ({ group }) => {
+  addJoinableGroupToSidebar(group);
 });
 
 socket.on("room:left", ({ roomId: leftRoomId }) => {

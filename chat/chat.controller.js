@@ -4,6 +4,7 @@ const authService = require("../auth/auth.service");
 const chatService = require("./chat.service");
 const {
   notifyDmRoomCreated,
+  notifyGroupCreated,
   notifyRoomMemberJoined,
   notifyRoomMemberLeft,
 } = require("./chat.realtime");
@@ -96,6 +97,8 @@ const chatController = {
           sessionUser.id,
           groupName,
         );
+
+        await notifyGroupCreated(result.roomId, sessionUser.id, groupName);
 
         return res.status(201).json({
           success: true,

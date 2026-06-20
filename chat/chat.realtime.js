@@ -241,6 +241,31 @@ async function notifyDmRoomCreated(roomId, recipientUserId) {
   }
 }
 
+/**
+ * 새 그룹 생성 시:
+ * 1) 생성자의 다른 탭에 room:added push
+ * 2) 그 외 접속 중인 대시보드에 group:joinable push
+ */
+async function notifyGroupCreated(roomId, creatorId, groupName) {
+  if (!ioInstance) return;
+  try {
+    const room = await chatService.getRoomSummaryForUser(roomId, creatorId);
+    if (room) {
+      ioInstance.to(userChannel(creatorId)).emit("room:added", { room });
+    }
+
+    ioInstance.except(userChannel(creatorId)).emit("group:joinable", {
+      group: {
+        id: roomId,
+        name: groupName || room?.name || "그룹 채팅",
+        memberCount: 1,
+      },
+    });
+  } catch (error) {
+    console.error("[socket] notifyGroupCreated error:", error.stack);
+  }
+}
+
 async function notifyRoomMemberLeft(userId, roomId, { announce = true } = {}) {
   if (!ioInstance) return;
   const userRoom = userChannel(userId);
@@ -269,6 +294,7 @@ module.exports = {
   attachRealtime,
   getIo,
   notifyDmRoomCreated,
+  notifyGroupCreated,
   notifyRoomMemberJoined,
   notifyRoomMemberLeft,
 };
