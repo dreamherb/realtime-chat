@@ -173,8 +173,8 @@ function updateRoomNotification(targetRoomId, message) {
 
 function handleIncomingMessage(msgRoomId, message, room) {
   if (!message) return;
+  if (message.id && seenMessageIds.has(message.id)) return;
   if (message.id) {
-    if (seenMessageIds.has(message.id)) return;
     seenMessageIds.add(message.id);
   }
 
@@ -360,6 +360,7 @@ if (window.ChatNotifications) {
     },
     formatPreview: formatMessagePreview,
   });
+  ChatNotifications.refreshPushSubscriptionState();
 }
 
 initRoomListUnread();

@@ -3,6 +3,7 @@ const cookie = require("cookie");
 const jwt = require("jsonwebtoken");
 const authService = require("../auth/auth.service");
 const chatService = require("./chat.service");
+const notificationsService = require("../notifications/notifications.service");
 
 const ROOM_PREFIX = "room:";
 const USER_PREFIX = "user:";
@@ -13,6 +14,48 @@ function roomChannel(roomId) {
 
 function userChannel(userId) {
   return USER_PREFIX + userId;
+}
+
+async function notifyPushForMessage(roomId, senderId, message) {
+  if (!notificationsService.isPushConfigured() || !message) return;
+
+  if (message.type === "SYSTEM_JOIN" || message.type === "SYSTEM_LEAVE") return;
+
+  const preview = chatService.formatMessagePreview(
+    message.type,
+    message.from,
+    message.text,
+  );
+  if (!preview) return;
+
+  try {
+    const memberIds = await chatService.listActiveRoomMemberIds(roomId);
+    const body = `${message.from}: ${preview}`;
+    const recipients = memberIds.filter((memberId) => memberId !== Number(senderId));
+
+    await Promise.all(
+      recipients.map(async (memberId) => {
+        const room = await chatService.getRoomSummaryForUser(roomId, memberId);
+        const result = await notificationsService.sendPushToUser(memberId, {
+          title: room?.name || "새 메시지",
+          body,
+          tag: `chat-${roomId}-msg-${message.id}`,
+          url: `/dashboard?roomId=${roomId}`,
+        });
+        if (process.env.NODE_ENV === "development") {
+          console.log("[push] message notify", {
+            roomId,
+            messageId: message.id,
+            memberId,
+            result,
+          });
+        }
+        return result;
+      }),
+    );
+  } catch (error) {
+    console.error("[socket] notifyPushForMessage error:", error.stack);
+  }
 }
 
 // 모듈 전역에서 attach 이후 접근 가능하도록 보관
@@ -153,6 +196,8 @@ function bindHandlers(io, socket) {
         roomId: numericRoomId,
         message: result.message,
       });
+
+      notifyPushForMessage(numericRoomId, user.id, result.message);
 
       const { peerId } = await chatService.ensureDmPeerForMessage(
         numericRoomId,

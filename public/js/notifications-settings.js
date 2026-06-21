@@ -33,26 +33,32 @@ async function setPushStatusText() {
 
   if (!pushConfigured) {
     $status.text(
-      "서버 푸시 설정(VAPID)이 아직 준비되지 않았습니다. 데스크톱 알림은 바로 사용할 수 있습니다.",
+      "서버 VAPID가 없어 백그라운드 푸시는 비활성입니다. 같은 탭이 열려 있을 때만 알림이 동작합니다.",
     );
     $("#enablePushBtn, #disablePushBtn").prop("hidden", true);
     return;
   }
 
   if (!ChatNotifications.isEnabled()) {
-    $status.text("푸시 구독 전에 먼저 데스크톱 알림을 켜 주세요.");
+    $status.text(
+      "「알림 켜기」를 누르면 데스크톱 알림과 백그라운드 푸시 구독이 함께 설정됩니다.",
+    );
     $("#enablePushBtn, #disablePushBtn").prop("hidden", true);
     return;
   }
 
   if (pushState.subscribed) {
-    $status.text("이 기기는 푸시 알림에 구독되어 있습니다.");
+    $status.text(
+      "백그라운드 푸시에 구독되어 있습니다. 다른 탭·화면 잠금 시에도 서버가 OS 알림을 보냅니다.",
+    );
     $("#enablePushBtn").prop("hidden", true);
     $("#disablePushBtn").prop("hidden", false);
     return;
   }
 
-  $status.text("푸시 알림을 켜면 브라우저가 닫혀 있어도 알림을 받을 수 있습니다.");
+  $status.text(
+    "백그라운드 푸시가 아직 없습니다. 아래 버튼으로 다시 구독하거나 알림을 껐다 켜 주세요.",
+  );
   $("#enablePushBtn").prop("hidden", false);
   $("#disablePushBtn").prop("hidden", true);
 }
@@ -80,6 +86,8 @@ $(function () {
 
     if (!result.ok) {
       showAlertModal(result.message || "알림을 켤 수 없습니다.");
+    } else if (result.warning) {
+      showAlertModal(result.warning);
     }
 
     await refreshStatus();

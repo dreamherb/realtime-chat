@@ -496,10 +496,21 @@ async function ensureDmPeerForMessage(roomId, senderId) {
   return { peerId: peer.user_id, peerRestored: false };
 }
 
+async function listActiveRoomMemberIds(roomId) {
+  const [rows] = await pool.query(
+    `SELECT user_id
+     FROM chat_room_members
+     WHERE room_id = ? AND left_at IS NULL`,
+    [roomId],
+  );
+  return rows.map((row) => Number(row.user_id));
+}
+
 module.exports = {
   ROOM_TYPE,
   MESSAGE_TYPE,
   listRoomsForUser,
+  listActiveRoomMemberIds,
   findExistingDmRoom,
   isRoomMember,
   createDmRoom,

@@ -13,8 +13,7 @@ self.addEventListener("push", (event) => {
   const options = {
     body: payload.body || "",
     icon: payload.icon || DEFAULT_ICON,
-    tag: payload.tag || undefined,
-    renotify: Boolean(payload.tag),
+    tag: payload.tag || `chat-push-${Date.now()}`,
     data: {
       url: payload.url || "/dashboard",
     },
@@ -25,15 +24,22 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || "/dashboard";
+  const targetPath = event.notification.data?.url || "/dashboard";
+  const targetUrl = new URL(targetPath, self.location.origin).href;
 
   event.waitUntil(
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((windowClients) => {
         for (const client of windowClients) {
-          if (client.url.includes(targetUrl) && "focus" in client) {
-            return client.focus();
+          if (!client.url.startsWith(self.location.origin)) continue;
+          if ("focus" in client) {
+            return client.focus().then((focused) => {
+              if (focused && "navigate" in focused) {
+                return focused.navigate(targetUrl);
+              }
+              return focused;
+            });
           }
         }
         if (clients.openWindow) {
