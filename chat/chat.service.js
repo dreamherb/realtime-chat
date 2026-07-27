@@ -93,7 +93,11 @@ async function listRoomsForUser(userId) {
         unreadCount,
         unreadPreview:
           unreadCount > 0
-            ? formatMessagePreview(row.preview_type, row.preview_from, row.preview_text)
+            ? formatMessagePreview(
+                row.preview_type,
+                row.preview_from,
+                row.preview_text,
+              )
             : null,
       };
     })
@@ -115,11 +119,7 @@ async function findExistingDmRoom(userId, otherUserId) {
     LIMIT 1
   `;
 
-  const [rows] = await pool.query(sql, [
-    userId,
-    otherUserId,
-    ROOM_TYPE.DM,
-  ]);
+  const [rows] = await pool.query(sql, [userId, otherUserId, ROOM_TYPE.DM]);
 
   return rows[0]?.id ?? null;
 }
@@ -441,20 +441,146 @@ async function createSystemMessage({ roomId, actorId, kind }) {
   return insertMessageRow({
     roomId,
     senderId: actorId,
-    type: kind === "JOIN" ? MESSAGE_TYPE.SYSTEM_JOIN : MESSAGE_TYPE.SYSTEM_LEAVE,
+    type:
+      kind === "JOIN" ? MESSAGE_TYPE.SYSTEM_JOIN : MESSAGE_TYPE.SYSTEM_LEAVE,
     content: "",
   });
 }
 
 async function getRoomDisplayName(roomId, userId) {
-  const rooms = await listRoomsForUser(userId);
-  const room = rooms.find((r) => r.id === Number(roomId));
-  return room?.name ?? null;
+  const sql = `
+    SELECT
+      CASE
+        WHEN r.type = ? THEN (
+          SELECT u.nickname
+          FROM chat_room_members crm2
+          INNER JOIN users u ON u.id = crm2.user_id
+          WHERE crm2.room_id = r.id AND crm2.user_id <> ?
+          LIMIT 1
+        )
+        ELSE COALESCE(r.name, '그룹 채팅')
+      END AS display_name
+    FROM chat_rooms r
+    INNER JOIN chat_room_members crm ON crm.room_id = r.id
+    WHERE r.id = ? AND crm.user_id = ? AND crm.left_at IS NULL
+    LIMIT 1
+  `;
+  const [rows] = await pool.query(sql, [ROOM_TYPE.DM, userId, roomId, userId]);
+  return rows[0]?.display_name ?? null;
+}
+
+/** 푸시 title용: 방 1건만 조회. DM은 발신자 nickname, GROUP은 방 이름. */
+async function getPushTitleForRoom(roomId, senderNickname) {
+  const [rows] = await pool.query(
+    "SELECT type, COALESCE(name, '그룹 채팅') AS name FROM chat_rooms WHERE id = ? LIMIT 1",
+    [roomId],
+  );
+  const room = rows[0];
+  if (!room) return "새 메시지";
+  if (room.type === ROOM_TYPE.DM) return senderNickname || "새 메시지";
+  return room.name || "그룹 채팅";
 }
 
 async function getRoomSummaryForUser(roomId, userId) {
-  const rooms = await listRoomsForUser(userId);
-  return rooms.find((r) => r.id === Number(roomId)) ?? null;
+  const sql = `
+    SELECT
+      r.id,
+      r.type,
+      CASE
+        WHEN r.type = ? THEN (
+          SELECT u.nickname
+          FROM chat_room_members crm2
+          INNER JOIN users u ON u.id = crm2.user_id
+          WHERE crm2.room_id = r.id AND crm2.user_id <> ?
+          LIMIT 1
+        )
+        ELSE COALESCE(r.name, '그룹 채팅')
+      END AS display_name,
+      (
+        SELECT COUNT(*)
+        FROM messages m
+        WHERE m.room_id = r.id
+          AND m.id > COALESCE(crm.last_read_message_id, 0)
+          AND m.created_at >= crm.joined_at
+          AND m.sender_id <> ?
+      ) AS unread_count,
+      (
+        SELECT m.type
+        FROM messages m
+        WHERE m.room_id = r.id
+          AND m.id > COALESCE(crm.last_read_message_id, 0)
+          AND m.created_at >= crm.joined_at
+          AND m.sender_id <> ?
+        ORDER BY m.id DESC
+        LIMIT 1
+      ) AS preview_type,
+      (
+        SELECT m.content
+        FROM messages m
+        WHERE m.room_id = r.id
+          AND m.id > COALESCE(crm.last_read_message_id, 0)
+          AND m.created_at >= crm.joined_at
+          AND m.sender_id <> ?
+        ORDER BY m.id DESC
+        LIMIT 1
+      ) AS preview_text,
+      (
+        SELECT u.nickname
+        FROM messages m
+        INNER JOIN users u ON u.id = m.sender_id
+        WHERE m.room_id = r.id
+          AND m.id > COALESCE(crm.last_read_message_id, 0)
+          AND m.created_at >= crm.joined_at
+          AND m.sender_id <> ?
+        ORDER BY m.id DESC
+        LIMIT 1
+      ) AS preview_from
+    FROM chat_rooms r
+    INNER JOIN chat_room_members crm ON crm.room_id = r.id
+    WHERE r.id = ? AND crm.user_id = ? AND crm.left_at IS NULL
+    LIMIT 1
+  `;
+
+  const [rows] = await pool.query(sql, [
+    ROOM_TYPE.DM,
+    userId,
+    userId,
+    userId,
+    userId,
+    userId,
+    roomId,
+    userId,
+  ]);
+
+  const row = rows[0];
+  if (!row) return null;
+
+  const unreadCount = Number(row.unread_count) || 0;
+  return {
+    id: row.id,
+    type: row.type,
+    name: row.display_name,
+    unreadCount,
+    unreadPreview:
+      unreadCount > 0
+        ? formatMessagePreview(
+            row.preview_type,
+            row.preview_from,
+            row.preview_text,
+          )
+        : null,
+  };
+}
+
+/** 소켓 채널 join용 — unread/preview 없이 room_id만 */
+async function listActiveRoomIdsForUser(userId) {
+  const [rows] = await pool.query(
+    `SELECT room_id
+     FROM chat_room_members
+     WHERE user_id = ? AND left_at IS NULL`,
+    [userId],
+  );
+  return rows.map((row) => Number(row.room_id));
 }
 
 async function getDmPeerUserId(roomId, userId) {
@@ -510,6 +636,7 @@ module.exports = {
   ROOM_TYPE,
   MESSAGE_TYPE,
   listRoomsForUser,
+  listActiveRoomIdsForUser,
   listActiveRoomMemberIds,
   findExistingDmRoom,
   isRoomMember,
@@ -517,6 +644,7 @@ module.exports = {
   createGroupRoom,
   getMessagesForRoom,
   getRoomDisplayName,
+  getPushTitleForRoom,
   getRoomSummaryForUser,
   getDmPeerUserId,
   ensureDmPeerForMessage,

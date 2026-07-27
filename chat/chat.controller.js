@@ -141,8 +141,9 @@ const chatController = {
 
       const result = await chatService.joinGroup(roomId, sessionUser.id);
 
+      // 가입 API 응답을 시스템 메시지 INSERT에 묶지 않음 (동시 입장 시 응답 latency 보호)
       if (result.ok && !result.alreadyMember) {
-        await notifyRoomMemberJoined(roomId, sessionUser.id);
+        notifyRoomMemberJoined(roomId, sessionUser.id);
       }
 
       if (!result.ok) {
@@ -202,7 +203,7 @@ const chatController = {
       const result = await chatService.leaveRoom(roomId, sessionUser.id);
 
       if (result.ok) {
-        await notifyRoomMemberLeft(sessionUser.id, roomId, {
+        notifyRoomMemberLeft(sessionUser.id, roomId, {
           announce: result.roomType !== chatService.ROOM_TYPE.DM,
         });
       }

@@ -144,14 +144,38 @@ function getRoomListItem(targetRoomId) {
   return $roomList.find(`[data-room-id="${Number(targetRoomId)}"]`);
 }
 
+// ponytail: 연속 message:new 마다 DB UPDATE 치지 않도록 디바운스. 탭 닫을 때는 pagehide에서 flush.
+const READ_DEBOUNCE_MS = 2000;
+let readFlushTimer = null;
+let pendingReadRoomId = null;
+
+function flushRoomRead() {
+  if (pendingReadRoomId == null) return;
+  const id = pendingReadRoomId;
+  pendingReadRoomId = null;
+  if (readFlushTimer) {
+    clearTimeout(readFlushTimer);
+    readFlushTimer = null;
+  }
+  socket.emit("room:read", { roomId: id });
+}
+
 function markCurrentRoomRead() {
   if (!roomId) return;
 
   const id = Number(roomId);
   unreadByRoom.delete(id);
   applyUnreadState(getRoomListItem(id), 0, "");
-  socket.emit("room:read", { roomId: id });
+
+  pendingReadRoomId = id;
+  if (readFlushTimer) clearTimeout(readFlushTimer);
+  readFlushTimer = setTimeout(() => {
+    readFlushTimer = null;
+    flushRoomRead();
+  }, READ_DEBOUNCE_MS);
 }
+
+window.addEventListener("pagehide", flushRoomRead);
 
 function updateRoomNotification(targetRoomId, message) {
   const id = Number(targetRoomId);

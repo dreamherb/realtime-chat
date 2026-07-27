@@ -7,6 +7,8 @@ const notificationsService = require("../notifications/notifications.service");
 
 const ROOM_PREFIX = "room:";
 const USER_PREFIX = "user:";
+// ponytail: 푸시 HTTP 동시성 상한. 100명 그룹에서 오프라인만 대상으로도 충분. Redis/BullMQ로 올리면 이 제한은 worker 쪽으로 이동.
+const PUSH_CONCURRENCY = 5;
 
 function roomChannel(roomId) {
   return ROOM_PREFIX + roomId;
@@ -16,6 +18,39 @@ function userChannel(userId) {
   return USER_PREFIX + userId;
 }
 
+async function runWithConcurrency(items, concurrency, fn) {
+  if (!items.length) return;
+  let index = 0;
+  async function worker() {
+    while (index < items.length) {
+      const current = index;
+      index += 1;
+      await fn(items[current]);
+    }
+  }
+  const workers = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workers }, () => worker()));
+}
+
+async function listOfflineUserIds(userIds) {
+  if (!ioInstance || !userIds.length) return userIds;
+
+  const offline = [];
+  await runWithConcurrency(userIds, PUSH_CONCURRENCY, async (userId) => {
+    // 해당 대시보드가 활성화된 탭이나 기기에 접속중인 유저, 즉, 온라인인지 확인, 오프라인에만 푸시 알림 전송
+    const sockets = await ioInstance.in(userChannel(userId)).fetchSockets();
+    if (sockets.length === 0) {
+      offline.push(userId);
+    }
+  });
+  return offline;
+}
+
+/**
+ * 메시지 전송 경로와 분리된 fire-and-forget 푸시.
+ * - 소켓 접속 중(온라인) 유저는 message:new로 이미 수신 → 푸시 생략
+ * - title은 방 1회 조회, 수신자별 getRoomSummaryForUser 제거
+ */
 async function notifyPushForMessage(roomId, senderId, message) {
   if (!notificationsService.isPushConfigured() || !message) return;
 
@@ -30,29 +65,35 @@ async function notifyPushForMessage(roomId, senderId, message) {
 
   try {
     const memberIds = await chatService.listActiveRoomMemberIds(roomId);
-    const body = `${message.from}: ${preview}`;
-    const recipients = memberIds.filter((memberId) => memberId !== Number(senderId));
-
-    await Promise.all(
-      recipients.map(async (memberId) => {
-        const room = await chatService.getRoomSummaryForUser(roomId, memberId);
-        const result = await notificationsService.sendPushToUser(memberId, {
-          title: room?.name || "새 메시지",
-          body,
-          tag: `chat-${roomId}-msg-${message.id}`,
-          url: `/dashboard?roomId=${roomId}`,
-        });
-        if (process.env.NODE_ENV === "development") {
-          console.log("[push] message notify", {
-            roomId,
-            messageId: message.id,
-            memberId,
-            result,
-          });
-        }
-        return result;
-      }),
+    const candidates = memberIds.filter(
+      (memberId) => memberId !== Number(senderId),
     );
+    const recipients = await listOfflineUserIds(candidates);
+    if (!recipients.length) return;
+
+    const title = await chatService.getPushTitleForRoom(roomId, message.from);
+    const body = `${message.from}: ${preview}`;
+    const payload = {
+      title,
+      body,
+      tag: `chat-${roomId}-msg-${message.id}`,
+      url: `/dashboard?roomId=${roomId}`,
+    };
+
+    await runWithConcurrency(recipients, PUSH_CONCURRENCY, async (memberId) => {
+      const result = await notificationsService.sendPushToUser(
+        memberId,
+        payload,
+      );
+      if (process.env.NODE_ENV === "development") {
+        console.log("[push] message notify", {
+          roomId,
+          messageId: message.id,
+          memberId,
+          result,
+        });
+      }
+    });
   } catch (error) {
     console.error("[socket] notifyPushForMessage error:", error.stack);
   }
@@ -111,10 +152,10 @@ function bindHandlers(io, socket) {
 
   // 참여 중인 모든 방 socket 채널 가입 (다른 방 메시지 수신용)
   chatService
-    .listRoomsForUser(user.id)
-    .then((rooms) => {
-      for (const room of rooms) {
-        socket.join(roomChannel(room.id));
+    .listActiveRoomIdsForUser(user.id)
+    .then((roomIds) => {
+      for (const id of roomIds) {
+        socket.join(roomChannel(id));
       }
     })
     .catch((error) => {
