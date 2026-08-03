@@ -1,14 +1,22 @@
 const { Server } = require("socket.io");
+const { createAdapter } = require("@socket.io/redis-adapter");
 const cookie = require("cookie");
 const jwt = require("jsonwebtoken");
 const authService = require("../auth/auth.service");
 const chatService = require("./chat.service");
-const notificationsService = require("../notifications/notifications.service");
+const { notifyPushForMessage } = require("./chat.push");
+const {
+  getRedisClient,
+  createRedisDuplicate,
+} = require("../infrastructure/redis/redis.client");
+const presence = require("../infrastructure/redis/redis.presence");
+const {
+  publishChatMessageCreated,
+} = require("../infrastructure/kafka/kafka.producer");
+const { isKafkaEnabled } = require("../infrastructure/kafka/kafka.config");
 
 const ROOM_PREFIX = "room:";
 const USER_PREFIX = "user:";
-// ponytail: 푸시 HTTP 동시성 상한. 100명 그룹에서 오프라인만 대상으로도 충분. Redis/BullMQ로 올리면 이 제한은 worker 쪽으로 이동.
-const PUSH_CONCURRENCY = 5;
 
 function roomChannel(roomId) {
   return ROOM_PREFIX + roomId;
@@ -18,85 +26,33 @@ function userChannel(userId) {
   return USER_PREFIX + userId;
 }
 
-async function runWithConcurrency(items, concurrency, fn) {
-  if (!items.length) return;
-  let index = 0;
-  async function worker() {
-    while (index < items.length) {
-      const current = index;
-      index += 1;
-      await fn(items[current]);
-    }
-  }
-  const workers = Math.min(concurrency, items.length);
-  await Promise.all(Array.from({ length: workers }, () => worker()));
-}
-
-async function listOfflineUserIds(userIds) {
+async function listOfflineViaSockets(userIds) {
   if (!ioInstance || !userIds.length) return userIds;
 
   const offline = [];
-  await runWithConcurrency(userIds, PUSH_CONCURRENCY, async (userId) => {
-    // 해당 대시보드가 활성화된 탭이나 기기에 접속중인 유저, 즉, 온라인인지 확인, 오프라인에만 푸시 알림 전송
-    const sockets = await ioInstance.in(userChannel(userId)).fetchSockets();
-    if (sockets.length === 0) {
-      offline.push(userId);
-    }
-  });
+  await Promise.all(
+    userIds.map(async (userId) => {
+      const sockets = await ioInstance.in(userChannel(userId)).fetchSockets();
+      if (sockets.length === 0) offline.push(userId);
+    }),
+  );
   return offline;
 }
 
-/**
- * 메시지 전송 경로와 분리된 fire-and-forget 푸시.
- * - 소켓 접속 중(온라인) 유저는 message:new로 이미 수신 → 푸시 생략
- * - title은 방 1회 조회, 수신자별 getRoomSummaryForUser 제거
- */
-async function notifyPushForMessage(roomId, senderId, message) {
-  if (!notificationsService.isPushConfigured() || !message) return;
-
-  if (message.type === "SYSTEM_JOIN" || message.type === "SYSTEM_LEAVE") return;
-
-  const preview = chatService.formatMessagePreview(
-    message.type,
-    message.from,
-    message.text,
-  );
-  if (!preview) return;
-
-  try {
-    const memberIds = await chatService.listActiveRoomMemberIds(roomId);
-    const candidates = memberIds.filter(
-      (memberId) => memberId !== Number(senderId),
-    );
-    const recipients = await listOfflineUserIds(candidates);
-    if (!recipients.length) return;
-
-    const title = await chatService.getPushTitleForRoom(roomId, message.from);
-    const body = `${message.from}: ${preview}`;
-    const payload = {
-      title,
-      body,
-      tag: `chat-${roomId}-msg-${message.id}`,
-      url: `/dashboard?roomId=${roomId}`,
-    };
-
-    await runWithConcurrency(recipients, PUSH_CONCURRENCY, async (memberId) => {
-      const result = await notificationsService.sendPushToUser(
-        memberId,
-        payload,
-      );
-      if (process.env.NODE_ENV === "development") {
-        console.log("[push] message notify", {
-          roomId,
-          messageId: message.id,
-          memberId,
-          result,
-        });
-      }
+async function enqueueOrPushMessage(roomId, senderId, message) {
+  if (isKafkaEnabled()) {
+    const published = await publishChatMessageCreated({
+      roomId,
+      senderId,
+      message,
     });
-  } catch (error) {
-    console.error("[socket] notifyPushForMessage error:", error.stack);
+    if (published.ok) return;
   }
+
+  // Kafka 미설정/발행 실패 시 기존 경로로 폴백
+  notifyPushForMessage(roomId, senderId, message, {
+    fallbackOfflineIds: listOfflineViaSockets,
+  });
 }
 
 // 모듈 전역에서 attach 이후 접근 가능하도록 보관
@@ -149,6 +105,15 @@ function bindHandlers(io, socket) {
 
   // 사용자 단위 채널에 자동 가입 (멀티탭/디바이스 일괄 제어용)
   socket.join(userChannel(user.id));
+  presence.markOnline(user.id).catch((error) => {
+    console.error("[socket] presence online error:", error.message);
+  });
+
+  socket.on("disconnect", () => {
+    presence.markOffline(user.id).catch((error) => {
+      console.error("[socket] presence offline error:", error.message);
+    });
+  });
 
   // 참여 중인 모든 방 socket 채널 가입 (다른 방 메시지 수신용)
   chatService
@@ -238,7 +203,8 @@ function bindHandlers(io, socket) {
         message: result.message,
       });
 
-      notifyPushForMessage(numericRoomId, user.id, result.message);
+      // DB 저장 + 실시간 emit 후, 푸시/부가 처리는 Kafka 이벤트로 분리
+      enqueueOrPushMessage(numericRoomId, user.id, result.message);
 
       const { peerId } = await chatService.ensureDmPeerForMessage(
         numericRoomId,
@@ -264,11 +230,23 @@ function bindHandlers(io, socket) {
   });
 }
 
-function attachRealtime(httpServer) {
+async function attachRealtime(httpServer) {
   const io = new Server(httpServer, {
     cookie: false,
-    serveClient: true,
+    serveClient: true
   });
+
+  // Redis adapter: Node 인스턴스를 여러 개 띄워도 room broadcast가 공유됨
+  const redisPub = await getRedisClient();
+  if (redisPub) {
+    const redisSub = await createRedisDuplicate();
+    if (redisSub) {
+      io.adapter(createAdapter(redisPub, redisSub));
+      if (process.env.NODE_ENV === "development") {
+        console.log("[socket] redis adapter enabled");
+      }
+    }
+  }
 
   io.use(authenticate);
 

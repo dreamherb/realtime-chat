@@ -99,11 +99,22 @@ const PORT = process.env.SERVICE_PORT || 3000;
 app.set("port", PORT);
 
 const server = http.createServer(app);
-attachRealtime(server);
 
-server.listen(PORT);
-server.on("error", onError);
-server.on("listening", onListening);
+(async () => {
+  await attachRealtime(server);
+
+  // Kafka producer 백그라운드 워밍 (실패해도 앱은 폴백 푸시로 동작)
+  require("./infrastructure/kafka/kafka.producer")
+    .getProducer({ waitMs: 0 })
+    .catch(() => {});
+
+  server.listen(PORT);
+  server.on("error", onError);
+  server.on("listening", onListening);
+})().catch((error) => {
+  console.error("[boot] failed:", error);
+  process.exit(1);
+});
 
 function onError(error) { }
 
