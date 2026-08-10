@@ -103,10 +103,13 @@ const server = http.createServer(app);
 (async () => {
   await attachRealtime(server);
 
-  // Kafka producer 백그라운드 워밍 (실패해도 앱은 폴백 푸시로 동작)
-  require("./infrastructure/kafka/kafka.producer")
-    .getProducer({ waitMs: 0 })
-    .catch(() => {});
+  // Kafka producer 백그라운드 워밍 (보관)
+  // require("./infrastructure/kafka/kafka.producer")
+  //   .getProducer({ waitMs: 0 })
+  //   .catch(() => {});
+
+  // SQS 클라이언트 워밍 (실패해도 앱은 폴백 푸시로 동작)
+  require("./infrastructure/sqs/sqs.client").getSqsClient();
 
   server.listen(PORT);
   server.on("error", onError);

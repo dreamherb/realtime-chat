@@ -10,10 +10,15 @@ const {
   createRedisDuplicate,
 } = require("../infrastructure/redis/redis.client");
 const presence = require("../infrastructure/redis/redis.presence");
+// --- Kafka (보관: 재전환 시 SQS import 대신 사용) ---
+// const {
+//   publishChatMessageCreated,
+// } = require("../infrastructure/kafka/kafka.producer");
+// const { isKafkaEnabled } = require("../infrastructure/kafka/kafka.config");
 const {
   publishChatMessageCreated,
-} = require("../infrastructure/kafka/kafka.producer");
-const { isKafkaEnabled } = require("../infrastructure/kafka/kafka.config");
+} = require("../infrastructure/sqs/sqs.producer");
+const { isSqsEnabled } = require("../infrastructure/sqs/sqs.config");
 
 const ROOM_PREFIX = "room:";
 const USER_PREFIX = "user:";
@@ -40,7 +45,16 @@ async function listOfflineViaSockets(userIds) {
 }
 
 async function enqueueOrPushMessage(roomId, senderId, message) {
-  if (isKafkaEnabled()) {
+  // if (isKafkaEnabled()) {
+  //   const published = await publishChatMessageCreated({
+  //     roomId,
+  //     senderId,
+  //     message,
+  //   });
+  //   if (published.ok) return;
+  // }
+
+  if (isSqsEnabled()) {
     const published = await publishChatMessageCreated({
       roomId,
       senderId,
@@ -49,7 +63,7 @@ async function enqueueOrPushMessage(roomId, senderId, message) {
     if (published.ok) return;
   }
 
-  // Kafka 미설정/발행 실패 시 기존 경로로 폴백
+  // SQS 미설정/발행 실패 시 기존 경로로 폴백
   notifyPushForMessage(roomId, senderId, message, {
     fallbackOfflineIds: listOfflineViaSockets,
   });
@@ -203,7 +217,7 @@ function bindHandlers(io, socket) {
         message: result.message,
       });
 
-      // DB 저장 + 실시간 emit 후, 푸시/부가 처리는 Kafka 이벤트로 분리
+      // DB 저장 + 실시간 emit 후, 푸시/부가 처리는 Kafka 이벤트로 분리 => SQS로 변경
       enqueueOrPushMessage(numericRoomId, user.id, result.message);
 
       const { peerId } = await chatService.ensureDmPeerForMessage(

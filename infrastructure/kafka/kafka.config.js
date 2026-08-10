@@ -1,3 +1,4 @@
+// 현재 미사용: 푸시 이벤트는 SQS(infrastructure/sqs)로 전환됨. 재전환 시 이 모듈 사용.
 const TOPICS = {
   CHAT_MESSAGE_CREATED: "chat.message.created",
 };
