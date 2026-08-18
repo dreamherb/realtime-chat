@@ -19,6 +19,11 @@ const {
   publishChatMessageCreated,
 } = require("../infrastructure/sqs/sqs.producer");
 const { isSqsEnabled } = require("../infrastructure/sqs/sqs.config");
+const { consumeSend } = require("./chat.rate-limit");
+
+const sendRateByUser = new Map();
+const RATE_LIMIT_MESSAGE =
+  "채팅이 너무 빠릅니다. 잠시 후 다시 시도해주세요.";
 
 const ROOM_PREFIX = "room:";
 const USER_PREFIX = "user:";
@@ -191,6 +196,17 @@ function bindHandlers(io, socket) {
 
   socket.on("message:send", async ({ roomId, content } = {}, ack) => {
     try {
+      const rated = consumeSend(sendRateByUser.get(user.id));
+      sendRateByUser.set(user.id, rated.state);
+      if (!rated.ok) {
+        return ack?.({
+          ok: false,
+          code: "RATE_LIMITED",
+          message: RATE_LIMIT_MESSAGE,
+          retryAfterMs: rated.retryAfterMs,
+        });
+      }
+
       const numericRoomId = Number(roomId);
       if (!Number.isFinite(numericRoomId)) {
         return ack?.({ ok: false, message: "유효하지 않은 채팅방입니다." });

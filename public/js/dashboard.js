@@ -390,6 +390,51 @@ if (window.ChatNotifications) {
 initRoomListUnread();
 syncTitleBadge();
 
+const CHAT_RATE_MAX = 5;
+const CHAT_RATE_WINDOW_MS = 1000;
+const CHAT_BAN_MS = 5000;
+const CHAT_RATE_MESSAGE =
+  "채팅이 너무 빠릅니다. 잠시 후 다시 시도해주세요.";
+const chatSendTimes = [];
+let chatBannedUntil = 0;
+let chatToastTimer;
+
+function showChatToast(message) {
+  const el = document.getElementById("chatToast");
+  if (!el) {
+    return showAlertModal(message);
+  }
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.remove("is-visible");
+  void el.offsetWidth; // 애니메이션 실행 CSS 변경 감지를 위한 트릭
+  el.classList.add("is-visible");
+  clearTimeout(chatToastTimer);
+  chatToastTimer = setTimeout(() => {
+    el.classList.remove("is-visible");
+    el.hidden = true;
+  }, 2600);
+}
+
+function applyChatBan(retryAfterMs) {
+  const until = Date.now() + Math.max(Number(retryAfterMs) || 0, 0);
+  if (until > chatBannedUntil) chatBannedUntil = until;
+}
+
+function tryConsumeChatSend() {
+  const now = Date.now();
+  if (now < chatBannedUntil) return false;
+  while (chatSendTimes.length && now - chatSendTimes[0] >= CHAT_RATE_WINDOW_MS) {
+    chatSendTimes.shift();
+  }
+  if (chatSendTimes.length >= CHAT_RATE_MAX) {
+    applyChatBan(CHAT_BAN_MS);
+    return false;
+  }
+  chatSendTimes.push(now);
+  return true;
+}
+
 if (roomId) {
   scrollToBottom();
 
@@ -398,12 +443,21 @@ if (roomId) {
     const content = $input.val().trim();
     if (!content) return;
 
+    if (!tryConsumeChatSend()) {
+      showChatToast(CHAT_RATE_MESSAGE);
+      return;
+    }
+
     $input.prop("disabled", true);
 
     socket.emit("message:send", { roomId, content }, (res) => {
       $input.prop("disabled", false).focus();
 
       if (!res?.ok) {
+        if (res?.code === "RATE_LIMITED") {
+          applyChatBan(res.retryAfterMs || CHAT_BAN_MS);
+          return showChatToast(res.message || CHAT_RATE_MESSAGE);
+        }
         return showAlertModal(res?.message || "전송에 실패했습니다.");
       }
 

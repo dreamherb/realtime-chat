@@ -431,6 +431,40 @@ body {
   border-top: 1px solid var(--line);
 }
 
+.chat-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%) translateY(8px);
+  margin: 0;
+  max-width: min(90vw, 420px);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #111827;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 1100;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat-toast.is-visible {
+  animation: chatToastIn 0.2s ease-out forwards, chatToastOut 0.35s ease-in 2.2s forwards;
+}
+
+@keyframes chatToastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes chatToastOut {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to { opacity: 0; transform: translateX(-50%) translateY(8px); }
+}
+
 .composer-input {
   resize: none;
   overflow-y: hidden;
