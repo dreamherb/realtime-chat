@@ -7,8 +7,14 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "env-cmd -f .env.development nodemon app.js",
     "worker:chat": "env-cmd -f .env.development node workers/chat-message.worker.js",
-    "infra:up": "docker compose up -d",
-    "infra:down": "docker compose down"
+    "local:up": "docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build",
+    "local:down": "docker compose -f docker-compose.yml -f docker-compose.local.yml down",
+    "local:logs": "docker compose -f docker-compose.yml -f docker-compose.local.yml logs -f app worker",
+    "infra:up": "docker compose -f docker-compose.yml -f docker-compose.local.yml up -d redis elasticmq",
+    "infra:down": "docker compose -f docker-compose.yml -f docker-compose.local.yml down",
+    "prod:up": "docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d",
+    "prod:down": "docker compose -f docker-compose.yml -f docker-compose.prod.yml down",
+    "prod:logs": "docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f app worker"
   },
   "repository": {
     "type": "git",

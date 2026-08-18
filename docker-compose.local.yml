@@ -1,0 +1,66 @@
+services:
+  app:
+    container_name: realtime-chat-app
+    ports:
+      - "${SERVICE_PORT:-3000}:3000"
+    env_file:
+      - .env.development
+    extra_hosts:
+    # 리눅스의 경우에만 필요한 설정
+      - "host.docker.internal:host-gateway"
+    environment:
+      NODE_ENV: development
+      SERVICE_PORT: 3000
+      # 컨테이너 안 localhost !== 호스트. 로컬 MySQL은 호스트 3306 
+      MYSQL_HOST: host.docker.internal
+      MYSQL_PORT: 3306
+      REDIS_URL: redis://redis:6379
+      SQS_ENDPOINT: http://elasticmq:9324
+      SQS_QUEUE_URL: http://elasticmq:9324/000000000000/chat-message-created
+    depends_on:
+      redis:
+        condition: service_started
+      elasticmq:
+        condition: service_started
+
+  worker:
+    container_name: realtime-chat-worker
+    env_file:
+      - .env.development
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NODE_ENV: development
+      MYSQL_HOST: host.docker.internal
+      MYSQL_PORT: 3306
+      REDIS_URL: redis://redis:6379
+      SQS_ENDPOINT: http://elasticmq:9324
+      SQS_QUEUE_URL: http://elasticmq:9324/000000000000/chat-message-created
+    depends_on:
+      redis:
+        condition: service_started
+      elasticmq:
+        condition: service_started
+
+  redis:
+    image: redis:7-alpine
+    container_name: realtime-chat-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+
+  elasticmq:
+    image: softwaremill/elasticmq-native:1.6.12
+    container_name: realtime-chat-elasticmq
+    restart: unless-stopped
+    ports:
+      - "9324:9324"
+      - "9325:9325"
+    volumes:
+      - ./infrastructure/sqs/elasticmq.conf:/opt/elasticmq.conf
+
+volumes:
+  redis_data:

@@ -1,0 +1,19 @@
+services:
+  app:
+    image: ${APP_IMAGE:-realtime-chat:latest}
+    container_name: realtime-chat-app
+    ports:
+      - "${SERVICE_PORT:-3000}:3000"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      SERVICE_PORT: 3000
+
+  worker:
+    image: ${APP_IMAGE:-realtime-chat:latest}
+    container_name: realtime-chat-worker
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
