@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { pool } = require("../infrastructure/database");
+const { revokeAllForUser } = require("./auth.sessions");
 
 function hashOtpCode(plainCode) {
   return crypto.createHash("sha256").update(String(plainCode), "utf8").digest("hex");
@@ -131,6 +132,11 @@ async function applyNewPasswordAfterResetVerification({
 
     await conn.query("DELETE FROM email_auth_number WHERE user_id = ?", [userId]);
     await conn.commit();
+    try {
+      await revokeAllForUser(userId);
+    } catch (error) {
+      console.error("[password-reset] revoke sessions:", error.message);
+    }
     return { ok: true };
   } catch (e) {
     await conn.rollback();

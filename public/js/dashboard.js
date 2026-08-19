@@ -347,6 +347,10 @@ socket.on("disconnect", (reason) => {
   console.warn("[socket] disconnected:", reason);
 });
 
+socket.on("session:replaced", () => {
+  window.location.href = "/auth/logout";
+});
+
 socket.on("message:new", ({ roomId: msgRoomId, message }) => {
   handleIncomingMessage(msgRoomId, message);
 });

@@ -2,6 +2,7 @@ const { Server } = require("socket.io");
 const { createAdapter } = require("@socket.io/redis-adapter");
 const cookie = require("cookie");
 const jwt = require("jsonwebtoken");
+const { assertSession } = require("../auth/auth.sessions");
 const authService = require("../auth/auth.service");
 const chatService = require("./chat.service");
 const { notifyPushForMessage } = require("./chat.push");
@@ -98,8 +99,9 @@ async function authenticate(socket, next) {
 
     const payload = jwt.verify(token, jwtSecret);
     const userId = payload?.id;
+    const alive = await assertSession(payload);
 
-    if (!userId) {
+    if (!userId || !alive) {
       return next(new Error("UNAUTHORIZED"));
     }
 

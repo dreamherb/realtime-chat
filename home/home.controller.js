@@ -1,17 +1,19 @@
-const { getUsiToken, verifyUsiToken } = require("../auth/auth.middleware");
+const { attachValidUser, clearSessionCookie } = require("../auth/auth.middleware");
 
 const homeController = {
   // GET /
   async getRoot(req, res, next) {
     try {
-      const token = getUsiToken(req);
-      if (token) {
-        try {
-          verifyUsiToken(token);
+      try {
+        const result = await attachValidUser(req);
+        if (result.ok) {
           return res.redirect("/dashboard");
-        } catch {
-          res.clearCookie("usi", { path: "/" });
         }
+        if (result.reason === "REVOKED") {
+          clearSessionCookie(res);
+        }
+      } catch {
+        clearSessionCookie(res);
       }
 
       return res.render("login");
@@ -24,4 +26,3 @@ const homeController = {
 };
 
 module.exports = homeController;
-

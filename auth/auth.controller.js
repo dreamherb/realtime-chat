@@ -1,7 +1,17 @@
 const jwt = require("jsonwebtoken");
 const { encryptEmail, hashPassword, verifyPassword } = require("./auth.crypto");
-const { SESSION_COOKIE } = require("./auth.middleware");
+const {
+  SESSION_COOKIE,
+  DEVICE_COOKIE,
+  cookieBase,
+  revokeRequestSession,
+} = require("./auth.middleware");
 const authService = require("./auth.service");
+const {
+  SESSION_TTL_MS,
+  createSession,
+} = require("./auth.sessions");
+const { getIo } = require("../chat/chat.realtime");
 
 // GET /auth/login
 async function getLogin(req, res, next) {
@@ -61,7 +71,14 @@ async function postLogin(req, res, next) {
       });
     }
 
-    // 로그인에 성공한 후 JWT 발급
+    const session = await createSession(req, user.id);
+    if (session.replacedJtis.length) {
+      const io = getIo();
+      io?.to(`user:${user.id}`).emit("session:replaced", {
+        platform: session.platform,
+      });
+    }
+
     const jwtSecret = process.env.JWT_ACCESS_SECRET;
     if (!jwtSecret) {
       return res.status(500).json({
@@ -75,20 +92,24 @@ async function postLogin(req, res, next) {
         id: user.id,
         email: encryptedEmail,
         nickname: user.nickname,
+        sid: session.sessionId,
+        plat: session.platform,
       },
       jwtSecret,
       {
         expiresIn: "1h",
         issuer: "realtime-chat",
+        jwtid: session.jti,
       },
     );
 
-    res.cookie("usi", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 1000,
-      path: "/",
+    res.cookie(SESSION_COOKIE, accessToken, {
+      ...cookieBase(),
+      maxAge: SESSION_TTL_MS,
+    });
+    res.cookie(DEVICE_COOKIE, session.deviceId, {
+      ...cookieBase(),
+      maxAge: 365 * 24 * 60 * 60 * 1000,
     });
 
     return res.status(200).json({
@@ -154,25 +175,21 @@ async function postSignup(req, res, next) {
 }
 
 // GET /auth/logout
-function getLogout(req, res) {
-  res.clearCookie(SESSION_COOKIE, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-  });
+async function getLogout(req, res) {
+  try {
+    await revokeRequestSession(req);
+  } catch (error) {
+    console.error("ERROR IN GET /auth/logout : ", error.stack);
+  }
+  res.clearCookie(SESSION_COOKIE, { path: "/" });
   return res.redirect("/auth/login");
 }
 
 // POST /auth/logout
 async function postLogout(req, res) {
   try {
-    res.clearCookie(SESSION_COOKIE, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-    });
+    await revokeRequestSession(req);
+    res.clearCookie(SESSION_COOKIE, { path: "/" });
     return res.status(200).json({
       success: true,
       message: "로그아웃되었습니다.",
