@@ -69,24 +69,6 @@ async function cacheDel(jtis) {
   }
 }
 
-function isActiveRow(row) {
-  if (!row || row.revoked_at) return false;
-  return new Date(row.expires_at) > new Date();
-}
-
-async function loadActiveByJti(jti) {
-  const [rows] = await pool.query(
-    `SELECT id, user_id, platform, expires_at, revoked_at
-     FROM users_sessions
-     WHERE token_jti = ?
-     LIMIT 1`,
-    [jti],
-  );
-  const row = rows[0];
-  if (!isActiveRow(row)) return null;
-  return row;
-}
-
 async function createSession(req, userId) {
   const userAgent = String(req.headers?.["user-agent"] || "").slice(0, 512);
   const platform = detectPlatform(userAgent);
@@ -167,7 +149,16 @@ async function assertSession(payload) {
     return Number(cached.userId) === userId;
   }
 
-  const row = await loadActiveByJti(jti);
+  const [rows] = await pool.query(
+    `SELECT id, user_id, platform, expires_at
+     FROM users_sessions
+     WHERE token_jti = ?
+       AND revoked_at IS NULL
+       AND expires_at > NOW()
+     LIMIT 1`,
+    [jti],
+  );
+  const row = rows[0];
   if (!row || Number(row.user_id) !== userId) return false;
 
   const ttlSec = Math.ceil((new Date(row.expires_at).getTime() - Date.now()) / 1000);
