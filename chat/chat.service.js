@@ -365,6 +365,7 @@ function mapMessageRow(row) {
     from: row.sender_nickname,
     time: formatMessageTime(row.created_at),
     text: row.content,
+    clientMsgId: row.client_msg_id || null,
   };
 }
 
@@ -383,7 +384,7 @@ async function getMessagesForRoom(roomId, userId) {
   const joinedAt = memberRows[0].joined_at;
 
   const sql = `
-    SELECT m.id, m.type, m.sender_id, m.content, m.created_at, u.nickname AS sender_nickname
+    SELECT m.id, m.type, m.sender_id, m.content, m.client_msg_id, m.created_at, u.nickname AS sender_nickname
     FROM messages m
     INNER JOIN users u ON u.id = m.sender_id
     WHERE m.room_id = ? AND m.created_at >= ?
@@ -395,14 +396,14 @@ async function getMessagesForRoom(roomId, userId) {
   return rows.map(mapMessageRow);
 }
 
-async function insertMessageRow({ roomId, senderId, type, content }) {
+async function insertMessageRow({ roomId, senderId, type, content, clientMsgId = null }) {
   const [insertResult] = await pool.query(
-    "INSERT INTO messages (room_id, sender_id, type, content) VALUES (?, ?, ?, ?)",
-    [roomId, senderId, type, content],
+    "INSERT INTO messages (room_id, sender_id, type, content, client_msg_id) VALUES (?, ?, ?, ?, ?)",
+    [roomId, senderId, type, content, clientMsgId],
   );
 
   const [rows] = await pool.query(
-    `SELECT m.id, m.type, m.sender_id, m.content, m.created_at, u.nickname AS sender_nickname
+    `SELECT m.id, m.type, m.sender_id, m.content, m.client_msg_id, m.created_at, u.nickname AS sender_nickname
      FROM messages m
      INNER JOIN users u ON u.id = m.sender_id
      WHERE m.id = ?`,
@@ -412,7 +413,19 @@ async function insertMessageRow({ roomId, senderId, type, content }) {
   return mapMessageRow(rows[0]);
 }
 
-async function createMessage({ roomId, senderId, content }) {
+async function findMessageByClientMsgId(senderId, clientMsgId) {
+  const [rows] = await pool.query(
+    `SELECT m.id, m.type, m.sender_id, m.content, m.client_msg_id, m.created_at, u.nickname AS sender_nickname
+     FROM messages m
+     INNER JOIN users u ON u.id = m.sender_id
+     WHERE m.sender_id = ? AND m.client_msg_id = ?
+     LIMIT 1`,
+    [senderId, clientMsgId],
+  );
+  return rows[0] ? mapMessageRow(rows[0]) : null;
+}
+
+async function createMessage({ roomId, senderId, content, clientMsgId }) {
   const member = await isRoomMember(roomId, senderId);
   if (!member) {
     return { ok: false, reason: "NOT_MEMBER" };
@@ -423,14 +436,34 @@ async function createMessage({ roomId, senderId, content }) {
     return { ok: false, reason: "EMPTY_CONTENT" };
   }
 
-  const message = await insertMessageRow({
-    roomId,
-    senderId,
-    type: MESSAGE_TYPE.TEXT,
-    content: trimmed,
-  });
+  const safeClientMsgId =
+    typeof clientMsgId === "string" && clientMsgId.length > 0 && clientMsgId.length <= 36
+      ? clientMsgId
+      : null;
 
-  return { ok: true, message };
+  if (safeClientMsgId) {
+    const existing = await findMessageByClientMsgId(senderId, safeClientMsgId);
+    if (existing) {
+      return { ok: true, message: existing };
+    }
+  }
+
+  try {
+    const message = await insertMessageRow({
+      roomId,
+      senderId,
+      type: MESSAGE_TYPE.TEXT,
+      content: trimmed,
+      clientMsgId: safeClientMsgId,
+    });
+    return { ok: true, message };
+  } catch (error) {
+    if (error?.code === "ER_DUP_ENTRY" && safeClientMsgId) {
+      const existing = await findMessageByClientMsgId(senderId, safeClientMsgId);
+      if (existing) return { ok: true, message: existing };
+    }
+    throw error;
+  }
 }
 
 /**
@@ -648,6 +681,7 @@ module.exports = {
   getRoomSummaryForUser,
   getDmPeerUserId,
   ensureDmPeerForMessage,
+  findMessageByClientMsgId,
   createMessage,
   createSystemMessage,
   listJoinableGroups,

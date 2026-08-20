@@ -196,17 +196,27 @@ function bindHandlers(io, socket) {
     }
   });
 
-  socket.on("message:send", async ({ roomId, content } = {}, ack) => {
+  socket.on("message:send", async ({ roomId, content, clientMsgId } = {}, ack) => {
     try {
-      const rated = consumeSend(sendRateByUser.get(user.id));
-      sendRateByUser.set(user.id, rated.state);
-      if (!rated.ok) {
-        return ack?.({
-          ok: false,
-          code: "RATE_LIMITED",
-          message: RATE_LIMIT_MESSAGE,
-          retryAfterMs: rated.retryAfterMs,
-        });
+      const safeClientMsgId =
+        typeof clientMsgId === "string" && clientMsgId.length <= 36
+          ? clientMsgId
+          : null;
+      const alreadySaved =
+        safeClientMsgId &&
+        (await chatService.findMessageByClientMsgId(user.id, safeClientMsgId));
+
+      if (!alreadySaved) {
+        const rated = consumeSend(sendRateByUser.get(user.id));
+        sendRateByUser.set(user.id, rated.state);
+        if (!rated.ok) {
+          return ack?.({
+            ok: false,
+            code: "RATE_LIMITED",
+            message: RATE_LIMIT_MESSAGE,
+            retryAfterMs: rated.retryAfterMs,
+          });
+        }
       }
 
       const numericRoomId = Number(roomId);
@@ -214,11 +224,14 @@ function bindHandlers(io, socket) {
         return ack?.({ ok: false, message: "유효하지 않은 채팅방입니다." });
       }
 
-      const result = await chatService.createMessage({
-        roomId: numericRoomId,
-        senderId: user.id,
-        content,
-      });
+      const result = alreadySaved
+        ? { ok: true, message: alreadySaved }
+        : await chatService.createMessage({
+            roomId: numericRoomId,
+            senderId: user.id,
+            content,
+            clientMsgId: safeClientMsgId,
+          });
 
       if (!result.ok) {
         if (result.reason === "NOT_MEMBER") {
@@ -235,8 +248,9 @@ function bindHandlers(io, socket) {
         message: result.message,
       });
 
-      // DB 저장 + 실시간 emit 후, 푸시/부가 처리는 Kafka 이벤트로 분리 => SQS로 변경
-      enqueueOrPushMessage(numericRoomId, user.id, result.message);
+      if (!alreadySaved) {
+        enqueueOrPushMessage(numericRoomId, user.id, result.message);
+      }
 
       const { peerId } = await chatService.ensureDmPeerForMessage(
         numericRoomId,

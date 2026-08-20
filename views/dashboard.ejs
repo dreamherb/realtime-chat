@@ -91,7 +91,7 @@
                   <span class="msg--system__time"><%= m.time %></span>
                 </div>
               <% } else { %>
-                <article class="msg <%= m.from === (user && user.name) ? 'msg--me' : '' %>">
+                <article class="msg <%= m.from === (user && user.name) ? 'msg--me' : '' %>"<% if (m.clientMsgId) { %> data-client-msg-id="<%= m.clientMsgId %>"<% } %>>
                   <div class="msg__meta">
                     <%= m.from %> · <%= m.time %>
                   </div>
@@ -134,12 +134,14 @@
       window.__DASHBOARD__ = {
         roomId: <%- JSON.stringify(selectedRoomId || null) %>,
         currentUser: <%- JSON.stringify(user.name) %>,
+        currentUserId: <%- JSON.stringify(user.id) %>,
         lastMessageId: <%- JSON.stringify((messages && messages.length ? messages[messages.length - 1].id : 0)) %>,
         rooms: <%- JSON.stringify((rooms || []).map(function(r) {
           return { id: r.id, type: r.type, name: r.name, unreadCount: r.unreadCount || 0, unreadPreview: r.unreadPreview || null };
         })) %>
       };
     </script>
+    <script src="/js/chat-outbox.js"></script>
     <script src="/js/dashboard.js"></script>
   </body>
 </html>

@@ -1,9 +1,20 @@
 const roomId = window.__DASHBOARD__.roomId;
 const currentUser = window.__DASHBOARD__.currentUser;
+const currentUserId = window.__DASHBOARD__.currentUserId;
 let lastMessageId = window.__DASHBOARD__.lastMessageId || 0;
 
 const unreadByRoom = new Map();
 const seenMessageIds = new Set();
+const inFlightClientMsgIds = new Set();
+
+function newClientMsgId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 function escapeHtml(str) {
   return String(str)
@@ -25,10 +36,15 @@ function buildMessageHtml(msg) {
   }
 
   const isMe = msg.from === currentUser;
-  const cls = isMe ? "msg msg--me" : "msg";
+  const pending = Boolean(msg.pending);
+  const cls = `msg${isMe ? " msg--me" : ""}${pending ? " msg--pending" : ""}`;
+  const clientAttr = msg.clientMsgId
+    ? ` data-client-msg-id="${escapeHtml(msg.clientMsgId)}"`
+    : "";
+  const timeLabel = pending ? `${msg.time} · 전송 대기` : msg.time;
   return `
-    <article class="${cls}">
-      <div class="msg__meta">${escapeHtml(msg.from)} · ${escapeHtml(msg.time)}</div>
+    <article class="${cls}"${clientAttr}>
+      <div class="msg__meta">${escapeHtml(msg.from)} · ${escapeHtml(timeLabel)}</div>
       <div class="msg__body">${escapeHtml(msg.text)}</div>
     </article>`;
 }
@@ -130,6 +146,9 @@ function scrollToBottom() {
 
 function appendMessage(msg) {
   if (!msg || !$messages.length) return;
+  if (msg.clientMsgId) {
+    removePendingMessage(msg.clientMsgId);
+  }
   if (msg.id && msg.id <= lastMessageId) return;
   $messages.find("p.muted").remove();
   $messages.append(buildMessageHtml(msg));
@@ -138,6 +157,101 @@ function appendMessage(msg) {
   }
   scrollToBottom();
   markCurrentRoomRead();
+}
+
+function removePendingMessage(clientMsgId) {
+  if (!clientMsgId || !$messages.length) return;
+  $messages.find(`[data-client-msg-id="${clientMsgId}"]`).remove();
+}
+
+function appendPendingRow(row) {
+  if (!row || Number(row.roomId) !== Number(roomId)) return;
+  if ($messages.find(`[data-client-msg-id="${row.clientMsgId}"]`).length) return;
+  $messages.find("p.muted").remove();
+  $messages.append(
+    buildMessageHtml({
+      from: row.from,
+      time: row.time,
+      text: row.text,
+      pending: true,
+      clientMsgId: row.clientMsgId,
+    }),
+  );
+  scrollToBottom();
+}
+
+function settlePending(clientMsgId, message, msgRoomId) {
+  if (clientMsgId) {
+    removePendingMessage(clientMsgId);
+    if (window.ChatOutbox) {
+      window.ChatOutbox.removePending(clientMsgId);
+    }
+    inFlightClientMsgIds.delete(clientMsgId);
+  }
+  if (message && Number(msgRoomId) === Number(roomId)) {
+    appendMessage(message);
+  }
+}
+
+function pendingTimeLabel() {
+  return new Date().toLocaleString("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function emitOutboxRow(row, skipClientRate) {
+  if (!row?.clientMsgId || inFlightClientMsgIds.has(row.clientMsgId)) return;
+  if (!skipClientRate && !tryConsumeChatSend()) {
+    showChatToast(CHAT_RATE_MESSAGE);
+    return;
+  }
+
+  inFlightClientMsgIds.add(row.clientMsgId);
+  const releaseTimer = setTimeout(() => {
+    inFlightClientMsgIds.delete(row.clientMsgId);
+  }, 20000);
+
+  socket.emit(
+    "message:send",
+    { roomId: row.roomId, content: row.text, clientMsgId: row.clientMsgId },
+    (res) => {
+      clearTimeout(releaseTimer);
+      if (!res?.ok) {
+        inFlightClientMsgIds.delete(row.clientMsgId);
+        if (res?.code === "RATE_LIMITED") {
+          applyChatBan(res.retryAfterMs || CHAT_BAN_MS);
+          showChatToast(res.message || CHAT_RATE_MESSAGE);
+          return;
+        }
+        if (res?.message) showAlertModal(res.message);
+        return;
+      }
+      settlePending(row.clientMsgId, res.message, row.roomId);
+    },
+  );
+}
+
+async function restorePendingForCurrentRoom() {
+  if (!roomId || !currentUserId || !window.ChatOutbox) return;
+  const rows = await window.ChatOutbox.listPendingForRoom(currentUserId, roomId);
+  for (const row of rows) {
+    if ($messages.find(`[data-client-msg-id="${row.clientMsgId}"]`).length) {
+      await window.ChatOutbox.removePending(row.clientMsgId);
+      continue;
+    }
+    appendPendingRow(row);
+  }
+}
+
+async function flushOutbox() {
+  if (!currentUserId || !window.ChatOutbox || !socket.connected) return;
+  const rows = await window.ChatOutbox.listPendingForUser(currentUserId);
+  for (const row of rows) {
+    emitOutboxRow(row, true);
+  }
 }
 
 function getRoomListItem(targetRoomId) {
@@ -197,6 +311,13 @@ function updateRoomNotification(targetRoomId, message) {
 
 function handleIncomingMessage(msgRoomId, message, room) {
   if (!message) return;
+  if (message.clientMsgId) {
+    removePendingMessage(message.clientMsgId);
+    if (window.ChatOutbox) {
+      window.ChatOutbox.removePending(message.clientMsgId);
+    }
+    inFlightClientMsgIds.delete(message.clientMsgId);
+  }
   if (message.id && seenMessageIds.has(message.id)) return;
   if (message.id) {
     seenMessageIds.add(message.id);
@@ -333,7 +454,10 @@ socket.on("connect", () => {
     });
     markCurrentRoomRead();
   }
+  flushOutbox();
 });
+
+$(window).on("online", flushOutbox);
 
 socket.on("connect_error", (err) => {
   if (err && err.message === "UNAUTHORIZED") {
@@ -441,6 +565,7 @@ function tryConsumeChatSend() {
 
 if (roomId) {
   scrollToBottom();
+  restorePendingForCurrentRoom();
 
   $form.on("submit", function (e) {
     e.preventDefault();
@@ -452,22 +577,23 @@ if (roomId) {
       return;
     }
 
-    $input.prop("disabled", true);
+    const clientMsgId = newClientMsgId();
+    const row = {
+      clientMsgId,
+      userId: Number(currentUserId),
+      roomId: Number(roomId),
+      from: currentUser,
+      text: content,
+      time: pendingTimeLabel(),
+      createdAt: Date.now(),
+    };
 
-    socket.emit("message:send", { roomId, content }, (res) => {
-      $input.prop("disabled", false).focus();
-
-      if (!res?.ok) {
-        if (res?.code === "RATE_LIMITED") {
-          applyChatBan(res.retryAfterMs || CHAT_BAN_MS);
-          return showChatToast(res.message || CHAT_RATE_MESSAGE);
-        }
-        return showAlertModal(res?.message || "전송에 실패했습니다.");
-      }
-
-      appendMessage(res.message);
-      resetComposer();
-    });
+    resetComposer();
+    appendPendingRow(row);
+    const persist = window.ChatOutbox
+      ? window.ChatOutbox.putPending(row)
+      : Promise.resolve();
+    persist.finally(() => emitOutboxRow(row, true));
   });
 
   $input.on("input", function () {

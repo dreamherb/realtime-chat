@@ -395,6 +395,10 @@ body {
   border-color: #dbeafe
 }
 
+.msg--pending {
+  opacity: 0.62;
+}
+
 .msg--system {
   align-self: center;
   max-width: none;
