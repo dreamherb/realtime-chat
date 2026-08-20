@@ -13,7 +13,9 @@ function openDb() {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
         const store = db.createObjectStore(STORE, { keyPath: "clientMsgId" });
-        store.createIndex("byUserRoom", ["userId", "roomId"], { unique: false });
+        store.createIndex("byUserRoom", ["userId", "roomId"], {
+          unique: false,
+        });
         store.createIndex("byUser", "userId", { unique: false });
       }
     };
@@ -30,6 +32,7 @@ function txDone(request) {
 }
 
 // IndexedDB 불가(사설 모드 등)면 메모리. 새로고침 유실은 그때 감수. PWA는 IDB가 본경로.
+const memory = [];
 
 function memoryPut(row) {
   const i = memory.findIndex((item) => item.clientMsgId === row.clientMsgId);
