@@ -1,7 +1,13 @@
 const roomId = window.__DASHBOARD__.roomId;
 const currentUser = window.__DASHBOARD__.currentUser;
 const currentUserId = window.__DASHBOARD__.currentUserId;
-let lastMessageId = window.__DASHBOARD__.lastMessageId || 0;
+
+function numericId(id) {
+  const n = Number(id);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+let lastMessageId = numericId(window.__DASHBOARD__.lastMessageId);
 
 const unreadByRoom = new Map();
 const seenMessageIds = new Set();
@@ -149,11 +155,12 @@ function appendMessage(msg) {
   if (msg.clientMsgId) {
     removePendingMessage(msg.clientMsgId);
   }
-  if (msg.id && msg.id <= lastMessageId) return;
+  const id = numericId(msg.id);
+  if (id && id <= lastMessageId) return;
   $messages.find("p.muted").remove();
   $messages.append(buildMessageHtml(msg));
-  if (msg.id > lastMessageId) {
-    lastMessageId = msg.id;
+  if (id > lastMessageId) {
+    lastMessageId = id;
   }
   scrollToBottom();
   markCurrentRoomRead();
@@ -161,7 +168,8 @@ function appendMessage(msg) {
 
 function removePendingMessage(clientMsgId) {
   if (!clientMsgId || !$messages.length) return;
-  $messages.find(`[data-client-msg-id="${clientMsgId}"]`).remove();
+  // 확정 메시지에도 data-client-msg-id가 있음. pending만 지워야 함.
+  $messages.find(`.msg--pending[data-client-msg-id="${clientMsgId}"]`).remove();
 }
 
 function appendPendingRow(row) {
@@ -318,9 +326,10 @@ function handleIncomingMessage(msgRoomId, message, room) {
     }
     inFlightClientMsgIds.delete(message.clientMsgId);
   }
-  if (message.id && seenMessageIds.has(message.id)) return;
-  if (message.id) {
-    seenMessageIds.add(message.id);
+  const seenKey = message.id != null ? String(message.id) : "";
+  if (seenKey && seenMessageIds.has(seenKey)) return;
+  if (seenKey) {
+    seenMessageIds.add(seenKey);
   }
 
   if (room) {
@@ -601,10 +610,14 @@ if (roomId) {
   });
 
   $input.on("keydown", function (e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      $form.trigger("submit");
-    }
+    if (e.key !== "Enter" || e.shiftKey) return;
+    // 한글 IME: Enter 1회에 keydown이 두 번 옴(229 조합 확정 + 실제 Enter).
+    // 가드 없으면 본문 전송 직후 마지막 글자가 입력창에 남고 한 번 더 전송됨.
+    // 한글은 글자 입력 중 끝맺지 않은 구간 (composition 상태)일 수 있음.
+    // composition 상태일 때 음절 확정 keydown한번 후 실제 엔터 한번 더 옴.
+    if (e.isComposing || e.originalEvent?.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    $form.trigger("submit");
   });
 
   resizeComposer($input[0]);
