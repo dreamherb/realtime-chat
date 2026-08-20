@@ -55,7 +55,6 @@
       return "system-message";
     }
     if (isActivelyViewingCurrentRoom(msgRoomId)) return "viewing-current-room";
-    if (state.pushSubscribed) return "server-push-handles";
     return null;
   }
 
@@ -156,6 +155,15 @@
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       state.pushSubscribed = Boolean(subscription);
+      if (subscription && isEnabled()) {
+        // 같은 브라우저에서 계정을 바꿔도 현재 user_id로 endpoint를 다시 묶음
+        pushAjax({
+          url: "/api/push/subscribe",
+          type: "POST",
+          contentType: "application/json",
+          data: JSON.stringify(subscription.toJSON()),
+        }).catch(() => {});
+      }
       return state.pushSubscribed;
     } catch {
       state.pushSubscribed = false;
@@ -298,15 +306,13 @@
         return { ok: false, message: "푸시 알림이 아직 서버에서 준비되지 않았습니다." };
       }
 
-      const existing = await registration.pushManager.getSubscription();
-      if (existing) {
-        await existing.unsubscribe();
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(keyResponse.publicKey),
+        });
       }
-
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(keyResponse.publicKey),
-      });
 
       const saveResponse = await pushAjax({
         url: "/api/push/subscribe",
