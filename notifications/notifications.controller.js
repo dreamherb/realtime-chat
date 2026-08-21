@@ -115,7 +115,7 @@ const notificationsController = {
 
       return res.json({ success: true });
     } catch (error) {
-      console.error("ERROR IN POST /api/notifications/subscribe : ", error.stack);
+      console.error("ERROR IN POST /api/push/subscribe : ", error.stack);
       return res.status(500).json({
         success: false,
         message: "구독 저장 중 오류가 발생했습니다.",
@@ -140,7 +140,7 @@ const notificationsController = {
 
       return res.json({ success: true });
     } catch (error) {
-      console.error("ERROR IN DELETE /api/notifications/subscribe : ", error.stack);
+      console.error("ERROR IN DELETE /api/push/subscribe : ", error.stack);
       return res.status(500).json({
         success: false,
         message: "구독 해제 중 오류가 발생했습니다.",

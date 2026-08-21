@@ -282,23 +282,6 @@
     await releaseDevice();
   }
 
-  function getDebugState(msgRoomId, message) {
-    return {
-      supported: isSupported(),
-      permission: getPermission(),
-      enabled: isEnabled(),
-      accountEnabled: state.accountEnabled,
-      pushSubscribed: state.pushSubscribed,
-      hidden: global.document.hidden,
-      hasFocus: global.document.hasFocus(),
-      currentUser: state.currentUser,
-      currentRoomId: state.currentRoomId,
-      messageFrom: message?.from ?? null,
-      skipReason: getSkipReason(msgRoomId, message),
-      swController: Boolean(navigator.serviceWorker?.controller),
-    };
-  }
-
   function urlBase64ToUint8Array(base64String) {
     const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
     const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -389,10 +372,6 @@
     }
   }
 
-  async function unsubscribePush() {
-    return disable();
-  }
-
   async function releaseDevice({ notifyServer = true } = {}) {
     if (!isPushSupported()) {
       state.pushSubscribed = false;
@@ -442,13 +421,8 @@
     show,
     updateTitleBadge,
     subscribePush,
-    unsubscribePush,
     releaseDevice,
     getPushSubscriptionState,
-    refreshPushSubscriptionState,
-    registerServiceWorker,
-    getDebugState,
-    isSupported,
     isPushSupported,
     isEnabled,
     getPermission,

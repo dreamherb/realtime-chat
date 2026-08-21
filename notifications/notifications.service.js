@@ -77,7 +77,6 @@ async function savePushSubscription(userId, subscription, userAgent) {
 }
 
 async function removePushSubscription(userId, endpoint) {
-
   if (!endpoint) {
     await pool.query("DELETE FROM push_subscriptions WHERE user_id = ?", [userId]);
     return { ok: true };
@@ -91,7 +90,6 @@ async function removePushSubscription(userId, endpoint) {
 }
 
 async function listPushSubscriptionsForUser(userId) {
-
   const [rows] = await pool.query(
     "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?",
     [userId],
@@ -154,6 +152,5 @@ module.exports = {
   setPushEnabled,
   savePushSubscription,
   removePushSubscription,
-  listPushSubscriptionsForUser,
   sendPushToUser,
 };
