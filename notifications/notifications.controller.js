@@ -1,4 +1,4 @@
-const { resolveSessionUser } = require("../auth/auth.session");
+const { resolveSessionUser } = require("../auth/auth.service");
 const notificationsService = require("./notifications.service");
 
 const notificationsController = {

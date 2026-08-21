@@ -1,5 +1,5 @@
 const { encryptEmail } = require("../auth/auth.crypto");
-const { resolveSessionUser } = require("../auth/auth.session");
+const { resolveSessionUser } = require("../auth/auth.service");
 const authService = require("../auth/auth.service");
 const chatService = require("./chat.service");
 const {

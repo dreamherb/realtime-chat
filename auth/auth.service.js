@@ -47,8 +47,24 @@ async function findUserById(userId) {
   }
 }
 
+async function resolveSessionUser(req) {
+  if (req.user?.id) {
+    const user = await findUserById(req.user.id);
+    if (user) {
+      return user;
+    }
+  }
+
+  if (req.user?.email) {
+    return findUserByEmail(req.user.email);
+  }
+
+  return null;
+}
+
 module.exports = {
   createUser,
   findUserByEmail,
   findUserById,
+  resolveSessionUser,
 };
