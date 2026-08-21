@@ -9,36 +9,29 @@
 
         <div class="card card--auth notifications-card">
           <div class="notifications-card__section">
-            <h2 class="notifications-card__title">데스크톱 알림</h2>
-            <p class="muted notifications-card__desc">
-              알림 on/off는 계정에 저장됩니다. 한 번 켜면 다른 브라우저나 모바일에서
-              로그인해도 그 기기로 푸시가 옵니다. 로그아웃해도 설정은 유지됩니다.
-            </p>
-            <p class="notifications-card__status" id="desktopStatus"></p>
-            <div class="row row--gap-sm" style="margin-top: 1rem">
-              <button type="button" class="btn btn--primary" id="enableDesktopBtn">
-                알림 켜기
-              </button>
-              <button type="button" class="btn btn--secondary" id="disableDesktopBtn" hidden>
-                알림 끄기
-              </button>
+            <div class="notifications-card__head">
+              <h2 class="notifications-card__title">계정 알림 설정</h2>
+              <label class="switch">
+                <input type="checkbox" id="accountToggle" aria-label="계정 알림" />
+                <span class="switch__ui"></span>
+              </label>
             </div>
+            <p class="muted notifications-card__desc">
+              이 계정이 알림을 받을지 정합니다. 켜 두면 로그아웃 후에도 유지되고,
+              다른 기기에서 로그인하면 그 기기로도 푸시가 갈 수 있습니다.
+            </p>
+            <p class="notifications-card__status" id="accountStatus"></p>
           </div>
 
           <hr class="notifications-card__divider" />
 
           <div class="notifications-card__section">
-            <h2 class="notifications-card__title">푸시 알림 (모바일·백그라운드)</h2>
+            <h2 class="notifications-card__title">기기 알림 허용</h2>
             <p class="muted notifications-card__desc">
-              이 기기에서 서버 Web Push 구독 상태입니다. 계정 알림이 켜져 있으면
-              로그인할 때 자동으로 이 기기를 구독합니다.
+              PC 브라우저와 모바일 앱(PWA)은 알림 권한이 각각 있습니다.
+              이 페이지에서는 바꿀 수 없고, 지금 보고 있는 기기의 허용 상태만 표시합니다.
             </p>
-            <p class="notifications-card__status" id="pushStatus"></p>
-            <div class="row row--gap-sm" style="margin-top: 1rem">
-              <button type="button" class="btn btn--primary" id="enablePushBtn" hidden>
-                푸시 구독
-              </button>
-            </div>
+            <p class="notifications-card__status" id="deviceStatus"></p>
           </div>
 
           <div class="row row--gap-sm" style="margin-top: 1.5rem">

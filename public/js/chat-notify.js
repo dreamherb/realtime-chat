@@ -33,10 +33,14 @@
     return isServiceWorkerSupported() && "PushManager" in global;
   }
 
+  function isAccountEnabled() {
+    return Boolean(state.accountEnabled);
+  }
+
   function isEnabled() {
     if (!isSupported()) return false;
     if (global.Notification.permission !== "granted") return false;
-    return Boolean(state.accountEnabled);
+    return isAccountEnabled();
   }
 
   function isActivelyViewingCurrentRoom(msgRoomId) {
@@ -195,16 +199,7 @@
     return status.configured;
   }
 
-  async function enable() {
-    if (!isSupported()) {
-      return { ok: false, message: "이 브라우저는 알림을 지원하지 않습니다." };
-    }
-
-    const permission = await global.Notification.requestPermission();
-    if (permission !== "granted") {
-      return { ok: false, message: "알림 권한이 거부되었습니다." };
-    }
-
+  async function enableAccount() {
     try {
       await setAccountEnabled(true);
     } catch (error) {
@@ -215,25 +210,18 @@
       };
     }
 
-    const registration = await registerServiceWorker();
-    if (!registration) {
-      return {
-        ok: true,
-        warning:
-          "계정 알림은 켜졌지만 Service Worker 등록에 실패했습니다. 다른 기기에서는 동작할 수 있습니다.",
-      };
-    }
-
-    let pushResult = null;
-    if (isPushSupported() && (await isPushConfiguredOnServer())) {
-      pushResult = await subscribePush();
-    }
-
-    if (pushResult && !pushResult.ok) {
-      return {
-        ok: true,
-        warning: `계정 알림은 켜졌지만 이 기기 구독에 실패했습니다: ${pushResult.message}`,
-      };
+    if (
+      isPushSupported() &&
+      getPermission() === "granted" &&
+      (await isPushConfiguredOnServer())
+    ) {
+      const pushResult = await subscribePush();
+      if (!pushResult.ok) {
+        return {
+          ok: true,
+          warning: `계정 알림은 켜졌지만 이 기기 구독에 실패했습니다: ${pushResult.message}`,
+        };
+      }
     }
 
     return { ok: true, pushSubscribed: state.pushSubscribed };
@@ -416,7 +404,7 @@
 
   global.ChatNotifications = {
     init,
-    enable,
+    enableAccount,
     disable,
     show,
     updateTitleBadge,
@@ -424,6 +412,7 @@
     releaseDevice,
     getPushSubscriptionState,
     isPushSupported,
+    isAccountEnabled,
     isEnabled,
     getPermission,
   };

@@ -5,63 +5,71 @@ const PERMISSION_LABELS = {
   unsupported: "지원하지 않음",
 };
 
-function setDesktopStatusText() {
-  const permission = ChatNotifications.getPermission();
-  const enabled = ChatNotifications.isEnabled();
-  const label = PERMISSION_LABELS[permission] || permission;
-
-  let text = `브라우저 권한: ${label}`;
-  if (enabled) {
-    text += " · 이 계정에서 알림이 켜져 있습니다.";
-  }
-  $("#desktopStatus").text(text);
-
-  $("#enableDesktopBtn").prop("hidden", enabled || permission === "denied");
-  $("#disableDesktopBtn").prop("hidden", !enabled);
+function setAccountStatusText() {
+  const on = ChatNotifications.isAccountEnabled();
+  $("#accountToggle").prop("checked", on);
+  $("#accountStatus").text(
+    on ? "이 계정은 알림이 켜져 있습니다." : "이 계정은 알림이 꺼져 있습니다.",
+  );
 }
 
-async function setPushStatusText() {
-  const pushConfigured = Boolean(window.__NOTIFICATIONS__?.pushConfigured);
-  const pushState = await ChatNotifications.getPushSubscriptionState();
-  const $status = $("#pushStatus");
+function isMobileDevice() {
+  if (navigator.userAgentData && typeof navigator.userAgentData.mobile === "boolean") {
+    return navigator.userAgentData.mobile;
+  }
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+}
 
-  if (!ChatNotifications.isPushSupported()) {
-    $status.text("이 브라우저는 푸시 알림을 지원하지 않습니다.");
-    $("#enablePushBtn").prop("hidden", true);
+function isStandalonePwa() {
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true
+  );
+}
+
+function devicePermissionLabel() {
+  if (isMobileDevice() && isStandalonePwa()) return "모바일 기기 권한";
+  if (isMobileDevice()) return "모바일 브라우저 권한";
+  return "브라우저 권한";
+}
+
+function devicePermissionHint(permission) {
+  if (permission !== "denied" && permission !== "default") return "";
+  if (isMobileDevice() && isStandalonePwa()) {
+    return " · 허용하려면 휴대폰 설정에서 이 앱 알림을 켜 주세요.";
+  }
+  return " · 허용하려면 주소창 왼쪽 자물쇠에서 알림을 허용하세요.";
+}
+
+function setDeviceStatusText() {
+  const permission = ChatNotifications.getPermission();
+  const $status = $("#deviceStatus");
+
+  if (permission === "unsupported" || !ChatNotifications.isPushSupported()) {
+    $status.text("이 기기는 알림을 지원하지 않습니다.");
     return;
   }
 
-  if (!pushConfigured) {
-    $status.text(
-      "서버 VAPID가 없어 백그라운드 푸시는 비활성입니다. 같은 탭이 열려 있을 때만 알림이 동작합니다.",
-    );
-    $("#enablePushBtn").prop("hidden", true);
-    return;
+  const permLabel = PERMISSION_LABELS[permission] || permission;
+  let text = `${devicePermissionLabel()}: ${permLabel}`;
+  if (!window.__NOTIFICATIONS__?.pushConfigured) {
+    text += " · 서버 푸시 미설정(탭이 열려 있을 때만 알림)";
   }
-
-  if (!ChatNotifications.isEnabled()) {
-    $status.text(
-      "「알림 켜기」는 계정에 저장됩니다. 다른 브라우저·모바일에서 로그인하면 이 기기도 구독됩니다.",
-    );
-    $("#enablePushBtn").prop("hidden", true);
-    return;
-  }
-
-  if (pushState.subscribed) {
-    $status.text(
-      "이 기기는 백그라운드 푸시에 구독되어 있습니다. 로그아웃해도 계정 설정은 유지됩니다.",
-    );
-    $("#enablePushBtn").prop("hidden", true);
-    return;
-  }
-
-  $status.text("계정 알림은 켜져 있지만 이 기기 구독이 없습니다. 다시 구독해 주세요.");
-  $("#enablePushBtn").prop("hidden", false);
+  $status.text(text + devicePermissionHint(permission));
 }
 
 async function refreshStatus() {
-  setDesktopStatusText();
-  await setPushStatusText();
+  setAccountStatusText();
+  setDeviceStatusText();
+}
+
+function showResult(result, fallback) {
+  if (!result?.ok) {
+    showAlertModal(result?.message || fallback);
+    return false;
+  }
+  if (result.warning) showAlertModal(result.warning);
+  return true;
 }
 
 $(function () {
@@ -73,49 +81,20 @@ $(function () {
     }),
   ).then(refreshStatus);
 
-  $("#enableDesktopBtn").on("click", async function () {
-    const $btn = $(this);
-    $btn.prop("disabled", true);
-
-    const result = await ChatNotifications.enable();
-    $btn.prop("disabled", false);
-
-    if (!result.ok) {
-      showAlertModal(result.message || "알림을 켤 수 없습니다.");
-    } else if (result.warning) {
-      showAlertModal(result.warning);
-    }
-
-    await refreshStatus();
+  $(document).on("visibilitychange", function () {
+    if (document.visibilityState === "visible") refreshStatus();
   });
 
-  $("#disableDesktopBtn").on("click", async function () {
-    const $btn = $(this);
-    $btn.prop("disabled", true);
-
-    const result = await ChatNotifications.disable();
-    $btn.prop("disabled", false);
-    if (result && result.ok === false) {
-      showAlertModal(result.message || "알림을 끄지 못했습니다.");
+  $("#accountToggle").on("change", async function () {
+    const on = this.checked;
+    this.disabled = true;
+    const result = on
+      ? await ChatNotifications.enableAccount()
+      : await ChatNotifications.disable();
+    this.disabled = false;
+    if (!showResult(result, on ? "계정 알림을 켜지 못했습니다." : "계정 알림을 끄지 못했습니다.")) {
+      this.checked = !on;
     }
-    await refreshStatus();
-  });
-
-  $("#enablePushBtn").on("click", async function () {
-    const $btn = $(this);
-    $btn.prop("disabled", true);
-
-    const result = await ChatNotifications.subscribePush().catch((error) => ({
-      ok: false,
-      message: error?.responseJSON?.message || "푸시 구독에 실패했습니다.",
-    }));
-
-    $btn.prop("disabled", false);
-
-    if (!result.ok) {
-      showAlertModal(result.message || "푸시 구독에 실패했습니다.");
-    }
-
     await refreshStatus();
   });
 });
