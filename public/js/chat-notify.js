@@ -1,7 +1,6 @@
 (function initChatNotify(global) {
   if (!global) return;
 
-  const STORAGE_KEY = "chatNotificationsEnabled";
   const SW_URL = "/sw.js";
   const ICON_URL = "/icons/chat-notification.svg";
 
@@ -9,6 +8,7 @@
     currentUser: "",
     currentRoomId: null,
     baseTitle: "Dashboard",
+    accountEnabled: false,
     pushSubscribed: false,
     getRoomName: () => "새 메시지",
     formatPreview: (message) => String(message?.text || "").trim(),
@@ -36,7 +36,7 @@
   function isEnabled() {
     if (!isSupported()) return false;
     if (global.Notification.permission !== "granted") return false;
-    return global.localStorage.getItem(STORAGE_KEY) !== "0";
+    return Boolean(state.accountEnabled);
   }
 
   function isActivelyViewingCurrentRoom(msgRoomId) {
@@ -48,7 +48,7 @@
   function getSkipReason(msgRoomId, message) {
     if (!isSupported()) return "unsupported";
     if (global.Notification.permission !== "granted") return "permission-not-granted";
-    if (global.localStorage.getItem(STORAGE_KEY) === "0") return "disabled-by-user";
+    if (!state.accountEnabled) return "disabled-by-user";
     if (!message) return "no-message";
     if (message.from === state.currentUser) return "own-message";
     if (message.type === "SYSTEM_JOIN" || message.type === "SYSTEM_LEAVE") {
@@ -145,6 +145,34 @@
       total > 0 ? `(${total}) ${state.baseTitle}` : state.baseTitle;
   }
 
+  async function fetchPushStatus() {
+    try {
+      const response = await pushAjax({
+        url: "/api/push/status",
+        type: "GET",
+        dataType: "json",
+      });
+      return {
+        ok: true,
+        configured: Boolean(response?.pushConfigured),
+        enabled: Boolean(response?.enabled),
+      };
+    } catch {
+      return { ok: false, configured: false, enabled: false };
+    }
+  }
+
+  async function setAccountEnabled(enabled) {
+    const response = await pushAjax({
+      url: "/api/push/preference",
+      type: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({ enabled: Boolean(enabled) }),
+    });
+    state.accountEnabled = Boolean(response?.enabled);
+    return state.accountEnabled;
+  }
+
   async function refreshPushSubscriptionState() {
     if (!isPushSupported()) {
       state.pushSubscribed = false;
@@ -152,18 +180,9 @@
     }
 
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager?.getSubscription();
       state.pushSubscribed = Boolean(subscription);
-      if (subscription && isEnabled()) {
-        // 같은 브라우저에서 계정을 바꿔도 현재 user_id로 endpoint를 다시 묶음
-        pushAjax({
-          url: "/api/push/subscribe",
-          type: "POST",
-          contentType: "application/json",
-          data: JSON.stringify(subscription.toJSON()),
-        }).catch(() => {});
-      }
       return state.pushSubscribed;
     } catch {
       state.pushSubscribed = false;
@@ -172,16 +191,8 @@
   }
 
   async function isPushConfiguredOnServer() {
-    try {
-      const response = await pushAjax({
-        url: "/api/push/vapid-public-key",
-        type: "GET",
-        dataType: "json",
-      });
-      return Boolean(response?.success && response.publicKey);
-    } catch {
-      return false;
-    }
+    const status = await fetchPushStatus();
+    return status.configured;
   }
 
   async function enable() {
@@ -191,39 +202,54 @@
 
     const permission = await global.Notification.requestPermission();
     if (permission !== "granted") {
-      global.localStorage.setItem(STORAGE_KEY, "0");
       return { ok: false, message: "알림 권한이 거부되었습니다." };
     }
 
-    global.localStorage.setItem(STORAGE_KEY, "1");
+    try {
+      await setAccountEnabled(true);
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error?.responseJSON?.message || "알림 설정을 저장하지 못했습니다.",
+      };
+    }
+
     const registration = await registerServiceWorker();
     if (!registration) {
       return {
         ok: true,
         warning:
-          "알림 권한은 허용됐지만 Service Worker 등록에 실패했습니다. 다른 탭에서 알림이 안 올 수 있습니다.",
+          "계정 알림은 켜졌지만 Service Worker 등록에 실패했습니다. 다른 기기에서는 동작할 수 있습니다.",
       };
     }
 
     let pushResult = null;
     if (isPushSupported() && (await isPushConfiguredOnServer())) {
       pushResult = await subscribePush();
-      await refreshPushSubscriptionState();
     }
 
     if (pushResult && !pushResult.ok) {
       return {
         ok: true,
-        warning: `알림은 켜졌지만 백그라운드 푸시 구독에 실패했습니다: ${pushResult.message}`,
+        warning: `계정 알림은 켜졌지만 이 기기 구독에 실패했습니다: ${pushResult.message}`,
       };
     }
 
     return { ok: true, pushSubscribed: state.pushSubscribed };
   }
 
-  function disable() {
-    global.localStorage.setItem(STORAGE_KEY, "0");
-    state.pushSubscribed = false;
+  async function disable() {
+    try {
+      await setAccountEnabled(false);
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error?.responseJSON?.message || "알림 설정을 저장하지 못했습니다.",
+      };
+    }
+    await releaseDevice({ notifyServer: false });
     updateTitleBadge(new Map());
     return { ok: true };
   }
@@ -231,22 +257,37 @@
   function init(options) {
     Object.assign(state, options || {});
     state.baseTitle = global.document.title || state.baseTitle;
+    return syncFromServer();
+  }
 
-    if (getPermission() === "granted" && global.localStorage.getItem(STORAGE_KEY) !== "0") {
-      if (global.localStorage.getItem(STORAGE_KEY) !== "1") {
-        global.localStorage.setItem(STORAGE_KEY, "1");
-      }
-      registerServiceWorker();
-      refreshPushSubscriptionState();
+  async function syncFromServer() {
+    const status = await fetchPushStatus();
+    if (!status.ok) return;
+
+    state.accountEnabled = status.enabled;
+
+    if (!isPushSupported()) {
+      state.pushSubscribed = false;
+      return;
     }
+
+    if (status.enabled && status.configured) {
+      await registerServiceWorker();
+      if (getPermission() === "granted") {
+        await subscribePush();
+      }
+      return;
+    }
+
+    await releaseDevice();
   }
 
   function getDebugState(msgRoomId, message) {
     return {
       supported: isSupported(),
       permission: getPermission(),
-      storage: global.localStorage.getItem(STORAGE_KEY),
       enabled: isEnabled(),
+      accountEnabled: state.accountEnabled,
       pushSubscribed: state.pushSubscribed,
       hidden: global.document.hidden,
       hasFocus: global.document.hasFocus(),
@@ -286,6 +327,19 @@
     return raw || "푸시 구독에 실패했습니다.";
   }
 
+  async function saveSubscription(subscription) {
+    try {
+      return await pushAjax({
+        url: "/api/push/subscribe",
+        type: "POST",
+        contentType: "application/json",
+        data: JSON.stringify(subscription.toJSON()),
+      });
+    } catch (error) {
+      return error?.responseJSON || { success: false };
+    }
+  }
+
   async function subscribePush() {
     if (!isPushSupported()) {
       return { ok: false, message: "이 브라우저는 푸시 알림을 지원하지 않습니다." };
@@ -314,12 +368,15 @@
         });
       }
 
-      const saveResponse = await pushAjax({
-        url: "/api/push/subscribe",
-        type: "POST",
-        contentType: "application/json",
-        data: JSON.stringify(subscription.toJSON()),
-      });
+      let saveResponse = await saveSubscription(subscription);
+      if (saveResponse?.reason === "ENDPOINT_OWNED") {
+        await subscription.unsubscribe();
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(keyResponse.publicKey),
+        });
+        saveResponse = await saveSubscription(subscription);
+      }
       if (!saveResponse?.success) {
         return { ok: false, message: saveResponse?.message || "구독 저장에 실패했습니다." };
       }
@@ -333,14 +390,18 @@
   }
 
   async function unsubscribePush() {
+    return disable();
+  }
+
+  async function releaseDevice({ notifyServer = true } = {}) {
     if (!isPushSupported()) {
       state.pushSubscribed = false;
       return { ok: true };
     }
 
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager?.getSubscription();
       if (!subscription) {
         state.pushSubscribed = false;
         return { ok: true };
@@ -348,17 +409,18 @@
 
       const endpoint = subscription.endpoint;
       await subscription.unsubscribe();
-
-      await pushAjax({
-        url: "/api/push/subscribe",
-        type: "DELETE",
-        contentType: "application/json",
-        data: JSON.stringify({ endpoint }),
-      });
-
+      if (notifyServer) {
+        await pushAjax({
+          url: "/api/push/subscribe",
+          type: "DELETE",
+          contentType: "application/json",
+          data: JSON.stringify({ endpoint }),
+        }).catch(() => {});
+      }
       state.pushSubscribed = false;
       return { ok: true };
     } catch (error) {
+      state.pushSubscribed = false;
       const message =
         error?.responseJSON?.message || error?.statusText || "푸시 해제에 실패했습니다.";
       return { ok: false, message };
@@ -381,6 +443,7 @@
     updateTitleBadge,
     subscribePush,
     unsubscribePush,
+    releaseDevice,
     getPushSubscriptionState,
     refreshPushSubscriptionState,
     registerServiceWorker,

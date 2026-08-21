@@ -1,12 +1,32 @@
 const webpush = require("web-push");
 const { pool } = require("../infrastructure/database");
 
-let tableReady = false;
 let vapidConfigured = false;
-
 
 function getVapidPublicKey() {
   return process.env.VAPID_PUBLIC_KEY || null;
+}
+
+async function isPushEnabled(userId) {
+  if (!userId) return false;
+  const [rows] = await pool.query(
+    "SELECT push_enabled FROM users WHERE id = ? LIMIT 1",
+    [userId],
+  );
+  return Boolean(rows[0]?.push_enabled);
+}
+
+async function setPushEnabled(userId, enabled) {
+  await pool.query("UPDATE users SET push_enabled = ? WHERE id = ?", [
+    enabled ? 1 : 0,
+    userId,
+  ]);
+  if (!enabled) {
+    await pool.query("DELETE FROM push_subscriptions WHERE user_id = ?", [
+      userId,
+    ]);
+  }
+  return { ok: true };
 }
 
 function isPushConfigured() {
@@ -25,7 +45,6 @@ function ensureVapidConfigured() {
 }
 
 async function savePushSubscription(userId, subscription, userAgent) {
-
   const endpoint = subscription?.endpoint;
   const keys = subscription?.keys || {};
   const p256dh = keys.p256dh;
@@ -35,11 +54,18 @@ async function savePushSubscription(userId, subscription, userAgent) {
     return { ok: false, reason: "INVALID_SUBSCRIPTION" };
   }
 
+  const [existing] = await pool.query(
+    "SELECT user_id FROM push_subscriptions WHERE endpoint = ? LIMIT 1",
+    [endpoint],
+  );
+  if (existing[0] && Number(existing[0].user_id) !== Number(userId)) {
+    return { ok: false, reason: "ENDPOINT_OWNED" };
+  }
+
   const sql = `
     INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
     VALUES (?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
-      user_id = VALUES(user_id),
       p256dh = VALUES(p256dh),
       auth = VALUES(auth),
       user_agent = VALUES(user_agent),
@@ -75,6 +101,9 @@ async function listPushSubscriptionsForUser(userId) {
 
 async function sendPushToUser(userId, payload) {
   if (!isPushConfigured()) return { ok: false, reason: "NOT_CONFIGURED" };
+  if (!(await isPushEnabled(userId))) {
+    return { ok: false, reason: "DISABLED" };
+  }
 
   ensureVapidConfigured();
   const subscriptions = await listPushSubscriptionsForUser(userId);
@@ -121,6 +150,8 @@ async function sendPushToUser(userId, payload) {
 module.exports = {
   getVapidPublicKey,
   isPushConfigured,
+  isPushEnabled,
+  setPushEnabled,
   savePushSubscription,
   removePushSubscription,
   listPushSubscriptionsForUser,

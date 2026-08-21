@@ -18,6 +18,12 @@ router.get(
 );
 
 router.post(
+  "/api/push/preference",
+  requireAuth,
+  notificationsController.postPreference,
+);
+
+router.post(
   "/api/push/subscribe",
   requireAuth,
   notificationsController.postSubscribe,

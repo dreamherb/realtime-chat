@@ -12,7 +12,7 @@ function setDesktopStatusText() {
 
   let text = `브라우저 권한: ${label}`;
   if (enabled) {
-    text += " · 이 기기에서 알림이 켜져 있습니다.";
+    text += " · 이 계정에서 알림이 켜져 있습니다.";
   }
   $("#desktopStatus").text(text);
 
@@ -41,7 +41,7 @@ async function setPushStatusText() {
 
   if (!ChatNotifications.isEnabled()) {
     $status.text(
-      "「알림 켜기」를 누르면 데스크톱 알림과 백그라운드 푸시 구독이 함께 설정됩니다.",
+      "「알림 켜기」는 계정에 저장됩니다. 다른 브라우저·모바일에서 로그인하면 이 기기도 구독됩니다.",
     );
     $("#enablePushBtn, #disablePushBtn").prop("hidden", true);
     return;
@@ -49,16 +49,13 @@ async function setPushStatusText() {
 
   if (pushState.subscribed) {
     $status.text(
-      "백그라운드 푸시에 구독되어 있습니다. 다른 탭·화면 잠금 시에도 서버가 OS 알림을 보냅니다.",
+      "이 기기는 백그라운드 푸시에 구독되어 있습니다. 로그아웃해도 계정 설정은 유지됩니다.",
     );
-    $("#enablePushBtn").prop("hidden", true);
-    $("#disablePushBtn").prop("hidden", false);
+    $("#enablePushBtn, #disablePushBtn").prop("hidden", true);
     return;
   }
 
-  $status.text(
-    "백그라운드 푸시가 아직 없습니다. 아래 버튼으로 다시 구독하거나 알림을 껐다 켜 주세요.",
-  );
+  $status.text("계정 알림은 켜져 있지만 이 기기 구독이 없습니다. 다시 구독해 주세요.");
   $("#enablePushBtn").prop("hidden", false);
   $("#disablePushBtn").prop("hidden", true);
 }
@@ -69,13 +66,13 @@ async function refreshStatus() {
 }
 
 $(function () {
-  ChatNotifications.init({
-    currentUser: "",
-    currentRoomId: null,
-    baseTitle: document.title,
-  });
-
-  refreshStatus();
+  Promise.resolve(
+    ChatNotifications.init({
+      currentUser: "",
+      currentRoomId: null,
+      baseTitle: document.title,
+    }),
+  ).then(refreshStatus);
 
   $("#enableDesktopBtn").on("click", async function () {
     const $btn = $(this);
@@ -97,10 +94,11 @@ $(function () {
     const $btn = $(this);
     $btn.prop("disabled", true);
 
-    ChatNotifications.disable();
-    await ChatNotifications.unsubscribePush().catch(() => {});
-
+    const result = await ChatNotifications.disable();
     $btn.prop("disabled", false);
+    if (result && result.ok === false) {
+      showAlertModal(result.message || "알림을 끄지 못했습니다.");
+    }
     await refreshStatus();
   });
 
@@ -119,15 +117,6 @@ $(function () {
       showAlertModal(result.message || "푸시 구독에 실패했습니다.");
     }
 
-    await refreshStatus();
-  });
-
-  $("#disablePushBtn").on("click", async function () {
-    const $btn = $(this);
-    $btn.prop("disabled", true);
-
-    await ChatNotifications.unsubscribePush().catch(() => {});
-    $btn.prop("disabled", false);
     await refreshStatus();
   });
 });

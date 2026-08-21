@@ -481,7 +481,14 @@ socket.on("disconnect", (reason) => {
 });
 
 socket.on("session:replaced", () => {
-  window.location.href = "/auth/logout";
+  const go = () => {
+    window.location.href = "/auth/logout";
+  };
+  if (window.ChatNotifications?.releaseDevice) {
+    ChatNotifications.releaseDevice().finally(go);
+    return;
+  }
+  go();
 });
 
 socket.on("message:new", ({ roomId: msgRoomId, message }) => {
@@ -521,7 +528,6 @@ if (window.ChatNotifications) {
     },
     formatPreview: formatMessagePreview,
   });
-  ChatNotifications.refreshPushSubscriptionState();
 }
 
 initRoomListUnread();
@@ -667,28 +673,36 @@ $(document).on("click", ".js-logout", function () {
   const $btn = $(this);
   $btn.prop("disabled", true);
 
-  $.ajax({
-    url: "/auth/logout",
-    type: "POST",
-    contentType: "application/json",
-    data: JSON.stringify({}),
-    success: function (data) {
-      if (!data.success) {
+  const logout = function () {
+    $.ajax({
+      url: "/auth/logout",
+      type: "POST",
+      contentType: "application/json",
+      data: JSON.stringify({}),
+      success: function (data) {
+        if (!data.success) {
+          $btn.prop("disabled", false);
+          return showAlertModal(data.message || "로그아웃에 실패했습니다.");
+        }
+        window.location.href = data.redirectUrl || "/";
+      },
+      error: function (xhr) {
         $btn.prop("disabled", false);
-        return showAlertModal(data.message || "로그아웃에 실패했습니다.");
-      }
-      window.location.href = data.redirectUrl || "/";
-    },
-    error: function (xhr) {
-      $btn.prop("disabled", false);
-      try {
-        const res = xhr.responseJSON || JSON.parse(xhr.responseText || "{}");
-        showAlertModal(res.message || "로그아웃에 실패했습니다.");
-      } catch {
-        showAlertModal("로그아웃 처리 중 오류가 발생했습니다.");
-      }
-    },
-  });
+        try {
+          const res = xhr.responseJSON || JSON.parse(xhr.responseText || "{}");
+          showAlertModal(res.message || "로그아웃에 실패했습니다.");
+        } catch {
+          showAlertModal("로그아웃 처리 중 오류가 발생했습니다.");
+        }
+      },
+    });
+  };
+
+  if (window.ChatNotifications?.releaseDevice) {
+    ChatNotifications.releaseDevice().finally(logout);
+    return;
+  }
+  logout();
 });
 
 // 그룹 참여 버튼 (roomId 없어도 항상 활성)

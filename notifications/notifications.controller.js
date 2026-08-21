@@ -38,11 +38,44 @@ const notificationsController = {
     });
   },
 
-  getStatus(req, res) {
-    return res.json({
-      success: true,
-      pushConfigured: notificationsService.isPushConfigured(),
-    });
+  async getStatus(req, res) {
+    try {
+      const userId = req.user?.id;
+      const enabled = await notificationsService.isPushEnabled(userId);
+      return res.json({
+        success: true,
+        pushConfigured: notificationsService.isPushConfigured(),
+        enabled,
+      });
+    } catch (error) {
+      console.error("ERROR IN GET /api/push/status : ", error.stack);
+      return res.status(500).json({
+        success: false,
+        message: "알림 설정을 불러오지 못했습니다.",
+      });
+    }
+  },
+
+  async postPreference(req, res) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "인증이 필요합니다.",
+        });
+      }
+
+      const enabled = Boolean(req.body?.enabled);
+      await notificationsService.setPushEnabled(userId, enabled);
+      return res.json({ success: true, enabled });
+    } catch (error) {
+      console.error("ERROR IN POST /api/push/preference : ", error.stack);
+      return res.status(500).json({
+        success: false,
+        message: "알림 설정 저장에 실패했습니다.",
+      });
+    }
   },
 
   async postSubscribe(req, res) {
@@ -69,9 +102,14 @@ const notificationsController = {
       );
 
       if (!result.ok) {
-        return res.status(400).json({
+        const status = result.reason === "ENDPOINT_OWNED" ? 409 : 400;
+        return res.status(status).json({
           success: false,
-          message: "유효하지 않은 구독 정보입니다.",
+          reason: result.reason,
+          message:
+            result.reason === "ENDPOINT_OWNED"
+              ? "이 브라우저는 다른 계정에 이미 구독되어 있습니다."
+              : "유효하지 않은 구독 정보입니다.",
         });
       }
 
