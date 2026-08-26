@@ -5,11 +5,10 @@ const databaseConfig = {
   password: process.env.MYSQL_PASSWORD,
   database: process.env.MYSQL_DATABASE,
   waitForConnections: true,
-  connectionLimit: 20,
+  connectionLimit: 5,
   queueLimit: 0,
 };
 
 module.exports = {
   databaseConfig,
 };
-
