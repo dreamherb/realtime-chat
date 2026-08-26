@@ -1,14 +1,16 @@
 const { createClient } = require("redis");
-const { getRedisUrl, isRedisEnabled } = require("./redis.config");
+const { isRedisEnabled, getRedisClientOptions } = require("./redis.config");
 
 let clientPromise = null;
+const clients = new Set();
 
 async function getRedisClient() {
   if (!isRedisEnabled()) return null;
   if (clientPromise) return clientPromise;
 
   clientPromise = (async () => {
-    const client = createClient({ url: getRedisUrl() });
+    const client = createClient(getRedisClientOptions());
+    clients.add(client);
     client.on("error", (error) => {
       console.error("[redis] client error:", error.message);
     });
@@ -30,6 +32,7 @@ async function createRedisDuplicate() {
   const client = await getRedisClient();
   if (!client) return null;
   const duplicate = client.duplicate();
+  clients.add(duplicate);
   duplicate.on("error", (error) => {
     console.error("[redis] duplicate error:", error.message);
   });
@@ -37,7 +40,17 @@ async function createRedisDuplicate() {
   return duplicate;
 }
 
+async function closeRedis() {
+  clientPromise = null;
+  const pending = [...clients];
+  clients.clear();
+  await Promise.all(
+    pending.map((client) => client.close().catch(() => client.destroy())),
+  );
+}
+
 module.exports = {
   getRedisClient,
   createRedisDuplicate,
+  closeRedis,
 };

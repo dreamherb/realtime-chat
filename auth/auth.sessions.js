@@ -25,10 +25,6 @@ function deviceLabel(userAgent = "") {
 }
 
 function clientIp(req) {
-  const forwarded = req.headers?.["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.trim()) {
-    return forwarded.split(",")[0].trim().slice(0, 45);
-  }
   return (req.ip || req.socket?.remoteAddress || "").slice(0, 45) || null;
 }
 

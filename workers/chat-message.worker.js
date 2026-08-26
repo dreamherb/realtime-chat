@@ -7,6 +7,8 @@ const {
   DeleteMessageCommand,
 } = require("@aws-sdk/client-sqs");
 const { getSqsClient } = require("../infrastructure/sqs/sqs.client");
+const { pool } = require("../infrastructure/database");
+const { closeRedis } = require("../infrastructure/redis/redis.client");
 const {
   getSqsQueueUrl,
   isSqsEnabled,
@@ -77,21 +79,45 @@ async function handleMessage(body) {
   return true;
 }
 
+const SHUTDOWN_MS = 15000;
+let stopping = false;
+let sqsClient = null;
+
+function shutdown(signal) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`[worker] shutdown ${signal}`);
+  if (sqsClient) sqsClient.destroy();
+
+  const timer = setTimeout(() => {
+    console.error("[worker] shutdown timeout");
+    process.exit(1);
+  }, SHUTDOWN_MS);
+  timer.unref();
+}
+
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM");
+});
+process.on("SIGINT", () => {
+  shutdown("SIGINT");
+});
+
 async function start() {
   if (!isSqsEnabled()) {
     console.error("[worker] SQS_QUEUE_URL 미설정. worker를 종료합니다.");
     process.exit(1);
   }
 
-  const client = getSqsClient();
+  sqsClient = getSqsClient();
   const queueUrl = getSqsQueueUrl();
 
   console.log(`[worker] listening queue=${queueUrl}`);
 
-  while (true) {
+  while (!stopping) {
     let res;
     try {
-      res = await client.send(
+      res = await sqsClient.send(
         new ReceiveMessageCommand({
           QueueUrl: queueUrl,
           MaxNumberOfMessages: 10,
@@ -100,6 +126,7 @@ async function start() {
         }),
       );
     } catch (error) {
+      if (stopping) break;
       console.error("[worker] receive error:", error.message);
       await new Promise((r) => setTimeout(r, 2000));
       continue;
@@ -107,9 +134,10 @@ async function start() {
 
     const messages = res.Messages || [];
     for (const msg of messages) {
+      if (stopping) break;
       try {
         await handleMessage(msg.Body);
-        await client.send(
+        await sqsClient.send(
           new DeleteMessageCommand({
             QueueUrl: queueUrl,
             ReceiptHandle: msg.ReceiptHandle,
@@ -121,6 +149,9 @@ async function start() {
       }
     }
   }
+
+  await closeRedis();
+  await pool.end();
 }
 
 start().catch((error) => {

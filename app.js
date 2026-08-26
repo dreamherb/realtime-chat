@@ -13,9 +13,17 @@ const authRouter = require("./auth/auth.router");
 const dashboardRouter = require("./dashboard/dashboard.router");
 const chatRouter = require("./chat/chat.router");
 const notificationsRouter = require("./notifications/notifications.router");
-const { attachRealtime } = require("./chat/chat.realtime");
+const { attachRealtime, getIo } = require("./chat/chat.realtime");
+const { pool } = require("./infrastructure/database");
+const { closeRedis } = require("./infrastructure/redis/redis.client");
 
 const app = express();
+const SHUTDOWN_MS = 15000;
+let shuttingDown = false;
+
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 
 app.engine("ejs", engine.__express);
 app.set("views", path.join(__dirname, "./views")); 
@@ -131,3 +139,47 @@ function onListening() {
     let addr = server.address();
     debug("Listening port: " + addr.port);
 }
+
+async function closeHttp() {
+  const io = getIo();
+  if (io) {
+    await new Promise((resolve) => io.close(() => resolve()));
+  } else if (server.listening) {
+    await new Promise((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+  }
+  if (typeof server.closeIdleConnections === "function") {
+    server.closeIdleConnections();
+  }
+}
+
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.set("shuttingDown", true);
+  console.log(`[shutdown] ${signal}`);
+
+  const timer = setTimeout(() => {
+    console.error("[shutdown] timeout");
+    process.exit(1);
+  }, SHUTDOWN_MS);
+  timer.unref();
+
+  try {
+    await closeHttp();
+    await closeRedis();
+    await pool.end();
+    process.exit(0);
+  } catch (error) {
+    console.error("[shutdown] error:", error.message);
+    process.exit(1);
+  }
+}
+
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM");
+});
+process.on("SIGINT", () => {
+  shutdown("SIGINT");
+});

@@ -26,7 +26,10 @@ const homeController = {
       return res.render("error");
     }
   },
-  getHealth(_req, res) {
+  getHealth(req, res) {
+    if (req.app.get("shuttingDown")) {
+      return res.status(503).json({ status: "stopping" });
+    }
     return res.status(200).json({ status: "ok" });
   },
 };
