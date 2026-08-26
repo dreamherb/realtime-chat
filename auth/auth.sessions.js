@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { pool } = require("../infrastructure/database");
 const { getRedisClient } = require("../infrastructure/redis/redis.client");
+const { encrypt } = require("./auth.crypto");
 
 const SESSION_TTL_MS = 60 * 60 * 1000;
 const DEVICE_COOKIE = "did";
@@ -72,7 +73,7 @@ async function createSession(req, userId) {
     req.cookies?.[DEVICE_COOKIE] || crypto.randomUUID().replace(/-/g, "").slice(0, 64);
   const jti = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-  const ip = clientIp(req);
+  const encryptedIp = clientIp(req) ? encrypt(clientIp(req)) : null;
 
   const conn = await pool.getConnection();
   let replacedJtis = [];
@@ -105,7 +106,7 @@ async function createSession(req, userId) {
         deviceId,
         deviceLabel(userAgent),
         jti,
-        ip,
+        encryptedIp,
         userAgent || null,
         expiresAt,
       ],

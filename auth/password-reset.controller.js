@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { encryptEmail, hashPassword } = require("./auth.crypto");
+const { encrypt, hashPassword } = require("./auth.crypto");
 const authService = require("./auth.service");
 const { signPasswordResetJwt } = require("./password-reset.jwt");
 const {
@@ -66,7 +66,7 @@ async function postSendForgotCode(req, res) {
       });
     }
 
-    const encryptedEmail = encryptEmail(email);
+    const encryptedEmail = encrypt(email);
     const user = await authService.findUserByEmail(encryptedEmail);
 
     if (!user) {
@@ -116,7 +116,7 @@ async function postVerifyForgotCode(req, res) {
       });
     }
 
-    const encryptedEmail = encryptEmail(email);
+    const encryptedEmail = encrypt(email);
     const user = await authService.findUserByEmail(encryptedEmail);
     if (!user) {
       return res.status(400).json({

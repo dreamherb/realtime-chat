@@ -1,4 +1,4 @@
-const { encryptEmail } = require("../auth/auth.crypto");
+const { encrypt } = require("../auth/auth.crypto");
 const { resolveSessionUser } = require("../auth/auth.service");
 const authService = require("../auth/auth.service");
 const chatService = require("./chat.service");
@@ -48,7 +48,7 @@ const chatController = {
           });
         }
 
-        const encryptedEmail = encryptEmail(targetEmail.trim());
+        const encryptedEmail = encrypt(targetEmail.trim());
         const targetUser = await authService.findUserByEmail(encryptedEmail);
 
         if (!targetUser) {

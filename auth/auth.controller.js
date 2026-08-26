@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const { encryptEmail, hashPassword, verifyPassword } = require("./auth.crypto");
+const { encrypt, hashPassword, verifyPassword } = require("./auth.crypto");
 const {
   SESSION_COOKIE,
   DEVICE_COOKIE,
@@ -52,7 +52,7 @@ async function postLogin(req, res, next) {
       });
     }
 
-    const encryptedEmail = encryptEmail(email);
+    const encryptedEmail = encrypt(email);
     const user = await authService.findUserByEmail(encryptedEmail);
 
     if (!user) {
@@ -148,7 +148,7 @@ async function postSignup(req, res, next) {
       });
     }
 
-    const encryptedEmail = encryptEmail(email);
+    const encryptedEmail = encrypt(email);
     const passwordHash = await hashPassword(password);
 
     await authService.createUser({
@@ -156,9 +156,6 @@ async function postSignup(req, res, next) {
       encryptedEmail,
       passwordHash,
     });
-
-    console.log("[signup] encryptedEmail:", encryptedEmail);
-    console.log("[signup] passwordHash:", passwordHash);
 
     return res.status(201).json({
       success: true,

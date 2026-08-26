@@ -43,7 +43,7 @@
         <div class="agree-item">
           <input type="checkbox" id="privacy" name="privacy" required aria-describedby="privacyLabel">
           <label id="privacyLabel" for="privacy">
-            (필수) <span class="linklike" data-open="modal-privacy">개인정보 수집·이용</span>에 동의합니다. (수집항목: 이메일)
+            (필수) <span class="linklike" data-open="modal-privacy">개인정보 수집·이용</span>에 동의합니다. (수집항목: 이메일, 접속 IP, 기기/브라우저 정보)
           </label>
         </div>
 
@@ -122,13 +122,17 @@
         <button class="close" aria-label="닫기" data-close="modal-privacy">×</button>
       </div>
       <div class="modal-body">
-[수집항목] 필수: 이메일 주소
+[수집항목] 필수: 이메일 주소, 접속 IP, 기기/브라우저 정보
 (선택: 휴대폰 번호는 본인확인·알림 등 목적 필요 시 별도 동의 후 수집)
 
 [수집·이용 목적]
 - 회원 식별 및 계정 생성
 - 서비스 이용에 따른 본인 확인
+- 로그인 세션 관리, 보안 및 부정이용 방지
 - 공지 및 주요 서비스 관련 알림 전달
+
+[추가 안내]
+- 푸시 알림 설정 시 알림 발송을 위해 푸시 구독 정보(endpoint, 암호키, 브라우저 정보)를 처리할 수 있습니다.
 
 [보유·이용 기간]
 - 회원 탈퇴 시까지 보관하며, 법령상 보존 필요 시 해당 기간 보관
