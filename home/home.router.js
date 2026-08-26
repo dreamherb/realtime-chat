@@ -4,6 +4,6 @@ const homeController = require("./home.controller");
 
 // 루트 페이지
 router.get("/", homeController.getRoot);
+router.get("/health", homeController.getHealth);
 
 module.exports = router;
-

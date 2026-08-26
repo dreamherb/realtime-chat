@@ -1,4 +1,7 @@
-const { attachValidUser, clearSessionCookie } = require("../auth/auth.middleware");
+const {
+  attachValidUser,
+  clearSessionCookie,
+} = require("../auth/auth.middleware");
 
 const homeController = {
   // GET /
@@ -22,6 +25,9 @@ const homeController = {
       res.status(500).send("An error occurred while getting index.");
       return res.render("error");
     }
+  },
+  getHealth(_req, res) {
+    return res.status(200).json({ status: "ok" });
   },
 };
 
