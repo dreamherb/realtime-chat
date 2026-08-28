@@ -1,0 +1,131 @@
+# GitHub (OIDC) → ECR push → SSM으로 EC2 compose 재기동
+# EC2가 Graviton(aarch64)이라 러너도 ubuntu-24.04-arm 으로 네이티브 빌드한다.
+#
+# GitHub Variables: ECR_REPOSITORY, EC2_DEPLOY_TAG (예: App=realtime-chat)
+# GitHub Secrets:   AWS_ROLE_ARN
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+        run: |
+          docker build --platform linux/arm64 -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy to EC2 via SSM
+        env:
+          APP_IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+          EC2_DEPLOY_TAG: ${{ vars.EC2_DEPLOY_TAG }}
+        run: |
+          set -euo pipefail
+
+          TAG_KEY="${EC2_DEPLOY_TAG%%=*}"
+          TAG_VALUE="${EC2_DEPLOY_TAG#*=}"
+          if [ "$TAG_KEY" = "$EC2_DEPLOY_TAG" ] || [ -z "$TAG_VALUE" ]; then
+            echo "EC2_DEPLOY_TAG must be key=value, e.g. App=realtime-chat" >&2
+            exit 1
+          fi
+
+          SCRIPT=$(jq -n \
+            --arg image "$APP_IMAGE" \
+            --arg region "$AWS_REGION" \
+            --arg compose "$(cat docker-compose.prod.yml)" \
+            '
+            [
+              "set -euo pipefail",
+              "APP_IMAGE=" + ($image | @sh),
+              "AWS_REGION=" + ($region | @sh),
+              "cd /storage/realtime-chat",
+              "cat > docker-compose.prod.yml <<'\''COMPOSE_EOF'\''\n" + $compose + "\nCOMPOSE_EOF",
+              "REGISTRY=${APP_IMAGE%%/*}",
+              "aws ecr get-login-password --region \"$AWS_REGION\" | docker login --username AWS --password-stdin \"$REGISTRY\"",
+              "echo \"APP_IMAGE=$APP_IMAGE\" > .env",
+              "docker compose -f docker-compose.prod.yml pull",
+              "docker compose -f docker-compose.prod.yml up -d",
+              "docker compose -f docker-compose.prod.yml ps"
+            ] | join("\n")
+            ')
+
+          PARAMS=$(jq -n --arg script "$SCRIPT" '{commands: [$script]}')
+
+          COMMAND_ID=$(aws ssm send-command \
+            --targets "Key=tag:${TAG_KEY},Values=${TAG_VALUE}" \
+            --document-name AWS-RunShellScript \
+            --comment "realtime-chat ${GITHUB_SHA}" \
+            --timeout-seconds 600 \
+            --parameters "$PARAMS" \
+            --query 'Command.CommandId' \
+            --output text)
+
+          echo "SSM command: $COMMAND_ID (tag ${TAG_KEY}=${TAG_VALUE})"
+
+          for i in $(seq 1 90); do
+            INV=$(aws ssm list-command-invocations \
+              --command-id "$COMMAND_ID" \
+              --details \
+              --output json)
+
+            COUNT=$(echo "$INV" | jq '.CommandInvocations | length')
+            if [ "$COUNT" -eq 0 ]; then
+              if [ "$i" -ge 8 ]; then
+                echo "no SSM-online instances matched tag ${TAG_KEY}=${TAG_VALUE}" >&2
+                exit 1
+              fi
+              sleep 4
+              continue
+            fi
+
+            echo "$INV" | jq -r '.CommandInvocations[] | "\(.InstanceId) \(.Status)"'
+
+            PENDING=$(echo "$INV" | jq '[.CommandInvocations[] | select(.Status == "Pending" or .Status == "InProgress" or .Status == "Delayed")] | length')
+            FAILED=$(echo "$INV" | jq '[.CommandInvocations[] | select(.Status == "Failed" or .Status == "Cancelled" or .Status == "TimedOut")] | length')
+            SUCCESS=$(echo "$INV" | jq '[.CommandInvocations[] | select(.Status == "Success")] | length')
+
+            if [ "$PENDING" -eq 0 ] && [ "$FAILED" -gt 0 ]; then
+              echo "$INV" | jq -r '.CommandInvocations[] | "=== \(.InstanceId) \(.Status) ===\n\(.StandardOutputContent)\n\(.StandardErrorContent)"'
+              exit 1
+            fi
+
+            if [ "$SUCCESS" -eq "$COUNT" ]; then
+              echo "$INV" | jq -r '.CommandInvocations[] | "=== \(.InstanceId) ===\n\(.StandardOutputContent)"'
+              exit 0
+            fi
+
+            sleep 4
+          done
+
+          echo "timed out waiting for SSM command $COMMAND_ID"
+          exit 1

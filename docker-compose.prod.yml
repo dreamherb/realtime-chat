@@ -2,6 +2,9 @@ services:
   app:
     image: ${APP_IMAGE:-realtime-chat:latest}
     container_name: realtime-chat-app
+    restart: unless-stopped
+    stop_grace_period: 20s
+    command: ["node", "app.js"]
     ports:
       - "${SERVICE_PORT:-3000}:3000"
     env_file:
@@ -13,6 +16,9 @@ services:
   worker:
     image: ${APP_IMAGE:-realtime-chat:latest}
     container_name: realtime-chat-worker
+    restart: unless-stopped
+    stop_grace_period: 20s
+    command: ["node", "workers/chat-message.worker.js"]
     env_file:
       - .env.production
     environment:
