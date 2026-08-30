@@ -41,9 +41,8 @@ jobs:
         env:
           IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
         run: |
-          docker build --platform linux/arm64 -t "$IMAGE:${GITHUB_SHA}" -t "$IMAGE:latest" .
+          docker build --platform linux/arm64 -t "$IMAGE:${GITHUB_SHA}" .
           docker push "$IMAGE:${GITHUB_SHA}"
-          docker push "$IMAGE:latest"
 
       - name: Deploy to EC2 via SSM
         env:
