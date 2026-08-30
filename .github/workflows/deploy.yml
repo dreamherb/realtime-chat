@@ -3,6 +3,7 @@
 #
 # GitHub Variables: ECR_REPOSITORY, EC2_DEPLOY_TAG (예: App=realtime-chat)
 # GitHub Secrets:   AWS_ROLE_ARN
+# SSM Parameter:    /realtime-chat/APP_IMAGE (ASG user-data가 pull할 이미지 URI)
 name: Deploy
 
 on:
@@ -20,6 +21,7 @@ permissions:
 
 env:
   AWS_REGION: ap-northeast-2
+  APP_IMAGE_PARAM: /realtime-chat/APP_IMAGE
 
 jobs:
   deploy:
@@ -57,6 +59,14 @@ jobs:
             echo "EC2_DEPLOY_TAG must be key=value, e.g. App=realtime-chat" >&2
             exit 1
           fi
+
+          aws ssm put-parameter \
+            --name "$APP_IMAGE_PARAM" \
+            --type String \
+            --value "$APP_IMAGE" \
+            --overwrite
+
+          echo "updated $APP_IMAGE_PARAM=$APP_IMAGE"
 
           # -r: jq 기본 출력은 JSON 문자열이라 \n이 글자로 남아 SSM이 한 줄로 실행한다
           SCRIPT=$(jq -n -r \
