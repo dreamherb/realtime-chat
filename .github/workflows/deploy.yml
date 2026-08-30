@@ -44,9 +44,15 @@ jobs:
       - name: Build and push
         env:
           IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+          REPO: ${{ vars.ECR_REPOSITORY }}
         run: |
-          docker build --platform linux/arm64 -t "$IMAGE:${GITHUB_SHA}" .
-          docker push "$IMAGE:${GITHUB_SHA}"
+          TAG="${GITHUB_SHA}"
+          if aws ecr describe-images --repository-name "$REPO" --image-ids "imageTag=${TAG}" >/dev/null 2>&1; then
+            echo "ECR tag ${TAG} already exists (immutable), skip build/push"
+          else
+            docker build --platform linux/arm64 -t "$IMAGE:${TAG}" .
+            docker push "$IMAGE:${TAG}"
+          fi
 
       - name: Deploy to EC2 via SSM
         env:
