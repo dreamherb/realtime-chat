@@ -11,7 +11,6 @@ services:
       - .env.production
     environment:
       NODE_ENV: production
-      SERVICE_PORT: 3000
 
   worker:
     image: ${APP_IMAGE:-realtime-chat:latest}
