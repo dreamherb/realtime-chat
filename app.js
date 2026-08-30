@@ -71,11 +71,6 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 app.use(bodyParser.json({ limit: 10000000 })); // 10 mb
 
-// 크롬 개발자 도구 에러 로그 방지
-app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
-    res.status(204).end(); // No Content
-});
-
 app.use("/", homeRouter);
 app.use("/auth", authRouter);
 app.use("/dashboard", dashboardRouter);

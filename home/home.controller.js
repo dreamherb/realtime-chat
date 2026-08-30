@@ -32,6 +32,10 @@ const homeController = {
     }
     return res.status(200).json({ status: "ok" });
   },
+  // favicon / Chrome DevTools 등 브라우저 프로브 — 본문 없이 204
+  ignoreProbe(req, res) {
+    res.status(204).end();
+  },
 };
 
 module.exports = homeController;
