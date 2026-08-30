@@ -3,7 +3,8 @@
 #
 # GitHub Variables: ECR_REPOSITORY, EC2_DEPLOY_TAG (예: App=realtime-chat)
 # GitHub Secrets:   AWS_ROLE_ARN
-# SSM Parameter:    /realtime-chat/APP_IMAGE (ASG user-data가 pull할 이미지 URI)
+# SSM Parameter:    /realtime-chat/APP_IMAGE (이미지 URI)
+#                   /realtime-chat/prod/env (SecureString, .env.production 본문)
 name: Deploy
 
 on:
@@ -22,6 +23,7 @@ permissions:
 env:
   AWS_REGION: ap-northeast-2
   APP_IMAGE_PARAM: /realtime-chat/APP_IMAGE
+  ENV_PARAM: /realtime-chat/prod/env
 
 jobs:
   deploy:
@@ -79,12 +81,14 @@ jobs:
               "APP_IMAGE=" + ($image | @sh),
               "AWS_REGION=" + ($region | @sh),
               "cd /storage/realtime-chat",
+              "aws ssm get-parameter --name /realtime-chat/prod/env --with-decryption --query Parameter.Value --output text > .env.production",
+              "chmod 600 .env.production",
               "cat > docker-compose.prod.yml <<'\''COMPOSE_EOF'\''\n" + $compose + "\nCOMPOSE_EOF",
               "REGISTRY=${APP_IMAGE%%/*}",
               "aws ecr get-login-password --region \"$AWS_REGION\" | docker login --username AWS --password-stdin \"$REGISTRY\"",
               "echo \"APP_IMAGE=$APP_IMAGE\" > .env",
               "docker compose -f docker-compose.prod.yml pull",
-              "docker compose -f docker-compose.prod.yml up -d",
+              "docker compose -f docker-compose.prod.yml up -d --force-recreate",
               "docker compose -f docker-compose.prod.yml ps"
             ] | join("\n")
             ')
