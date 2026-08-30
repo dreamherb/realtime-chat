@@ -59,7 +59,8 @@ jobs:
             exit 1
           fi
 
-          SCRIPT=$(jq -n \
+          # -r: jq 기본 출력은 JSON 문자열이라 \n이 글자로 남아 SSM이 한 줄로 실행한다
+          SCRIPT=$(jq -n -r \
             --arg image "$APP_IMAGE" \
             --arg region "$AWS_REGION" \
             --arg compose "$(cat docker-compose.prod.yml)" \
@@ -115,12 +116,12 @@ jobs:
             SUCCESS=$(echo "$INV" | jq '[.CommandInvocations[] | select(.Status == "Success")] | length')
 
             if [ "$PENDING" -eq 0 ] && [ "$FAILED" -gt 0 ]; then
-              echo "$INV" | jq -r '.CommandInvocations[] | "=== \(.InstanceId) \(.Status) ===\n\(.StandardOutputContent)\n\(.StandardErrorContent)"'
+              echo "$INV" | jq -r '.CommandInvocations[] | "=== \(.InstanceId) \(.Status) ===\n\(.CommandPlugins[0].Output // .StandardOutputContent // "")\n\(.StandardErrorContent // "")"'
               exit 1
             fi
 
             if [ "$SUCCESS" -eq "$COUNT" ]; then
-              echo "$INV" | jq -r '.CommandInvocations[] | "=== \(.InstanceId) ===\n\(.StandardOutputContent)"'
+              echo "$INV" | jq -r '.CommandInvocations[] | "=== \(.InstanceId) ===\n\(.CommandPlugins[0].Output // .StandardOutputContent // "")"'
               exit 0
             fi
 
