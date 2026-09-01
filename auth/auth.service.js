@@ -5,7 +5,7 @@ const { createSession } = require("./auth.sessions");
 
 async function createUser({ nickname, encryptedEmail, passwordHash }) {
   const sql =
-    "INSERT INTO users (nickname, email, password, status, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())";
+    "INSERT INTO users (nickname, email, password, status, push_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, 0, NOW(), NOW())";
   const params = [nickname, encryptedEmail, passwordHash, "INACTIVE"];
 
   try {

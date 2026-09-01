@@ -607,5 +607,6 @@ module.exports = {
   joinGroup,
   leaveRoom,
   markRoomAsRead,
+  mapRoomSummary,
   formatMessagePreview,
 };

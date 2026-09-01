@@ -1,5 +1,7 @@
-require("dotenv").config({ path: `./.env.${process.env.NODE_ENV}` });
-console.log("ENV", process.env.NODE_ENV);
+if (process.env.NODE_ENV !== "test") {
+  require("dotenv").config({ path: `./.env.${process.env.NODE_ENV}` });
+  console.log("ENV", process.env.NODE_ENV);
+}
 let express = require("express");
 const createError = require("http-errors");
 const path = require("path");
@@ -101,19 +103,23 @@ app.set("port", PORT);
 
 const server = http.createServer(app);
 
-(async () => {
-  await attachRealtime(server);
+module.exports = app;
 
-  // SQS 클라이언트 워밍 (실패해도 앱은 폴백 푸시로 동작)
-  require("./infrastructure/sqs/sqs.client").getSqsClient();
+if (require.main === module) {
+  (async () => {
+    await attachRealtime(server);
 
-  server.listen(PORT);
-  server.on("error", onError);
-  server.on("listening", onListening);
-})().catch((error) => {
-  console.error("[boot] failed:", error);
-  process.exit(1);
-});
+    // SQS 클라이언트 워밍 (실패해도 앱은 폴백 푸시로 동작)
+    require("./infrastructure/sqs/sqs.client").getSqsClient();
+
+    server.listen(PORT);
+    server.on("error", onError);
+    server.on("listening", onListening);
+  })().catch((error) => {
+    console.error("[boot] failed:", error);
+    process.exit(1);
+  });
+}
 
 function onError(error) {
   if (error.syscall !== "listen") {
@@ -179,9 +185,11 @@ async function shutdown(signal) {
   }
 }
 
-process.on("SIGTERM", () => {
-  shutdown("SIGTERM");
-});
-process.on("SIGINT", () => {
-  shutdown("SIGINT");
-});
+if (require.main === module) {
+  process.on("SIGTERM", () => {
+    shutdown("SIGTERM");
+  });
+  process.on("SIGINT", () => {
+    shutdown("SIGINT");
+  });
+}

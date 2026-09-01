@@ -216,6 +216,8 @@ function readJtiFromToken(token) {
 module.exports = {
   SESSION_TTL_MS,
   DEVICE_COOKIE,
+  detectPlatform,
+  deviceLabel,
   createSession,
   onSessionReplaced,
   assertSession,
