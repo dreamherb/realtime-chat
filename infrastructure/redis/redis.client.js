@@ -1,15 +1,29 @@
 const { createClient } = require("redis");
-const { isRedisEnabled, getRedisClientOptions } = require("./redis.config");
+
+function getRedisUrl() {
+  return process.env.REDIS_URL || null;
+}
+
+function isRedisTlsEnabled() {
+  const url = getRedisUrl() || "";
+  if (url.startsWith("rediss://")) return true;
+  const flag = (process.env.REDIS_TLS || "").toLowerCase();
+  return flag === "1" || flag === "true";
+}
 
 let clientPromise = null;
 const clients = new Set();
 
 async function getRedisClient() {
-  if (!isRedisEnabled()) return null;
+  if (!getRedisUrl()) return null;
   if (clientPromise) return clientPromise;
 
   clientPromise = (async () => {
-    const client = createClient(getRedisClientOptions());
+    const options = { url: getRedisUrl() };
+    if (isRedisTlsEnabled()) {
+      options.socket = { tls: true };
+    }
+    const client = createClient(options);
     clients.add(client);
     client.on("error", (error) => {
       console.error("[redis] client error:", error.message);

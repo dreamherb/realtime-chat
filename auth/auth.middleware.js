@@ -21,16 +21,23 @@ function getUsiToken(req) {
   return req.cookies?.[SESSION_COOKIE] || null;
 }
 
-function verifyUsiToken(token) {
+function clearSessionCookie(res) {
+  res.clearCookie(SESSION_COOKIE, { path: "/" });
+}
+
+async function authenticateAccessToken(token) {
+  if (!token) return { ok: false, reason: "MISSING" };
+
   const jwtSecret = process.env.JWT_ACCESS_SECRET;
   if (!jwtSecret) {
     throw new Error("JWT_ACCESS_SECRET is not configured");
   }
-  return jwt.verify(token, jwtSecret);
-}
 
-function clearSessionCookie(res) {
-  res.clearCookie(SESSION_COOKIE, { path: "/" });
+  const payload = jwt.verify(token, jwtSecret);
+  const alive = await assertSession(payload);
+  if (!alive) return { ok: false, reason: "REVOKED" };
+
+  return { ok: true, payload, token };
 }
 
 async function attachValidUser(req) {
@@ -39,62 +46,43 @@ async function attachValidUser(req) {
   const bearerToken = authHeader.startsWith("Bearer ")
     ? authHeader.slice(7)
     : null;
-  const token = cookieToken || bearerToken;
-  if (!token) return { ok: false, reason: "MISSING" };
-
-  const payload = verifyUsiToken(token);
-  const alive = await assertSession(payload);
-  if (!alive) return { ok: false, reason: "REVOKED" };
-
-  return { ok: true, payload, token };
+  return authenticateAccessToken(cookieToken || bearerToken);
 }
 
-/**
- * 로그인 세션(usi 쿠키)이 없거나 만료/철회되면 루트(로그인)로 리다이렉트
- */
-async function requireUsiForPage(req, res, next) {
-  try {
-    const result = await attachValidUser(req);
-    if (!result.ok) {
-      clearSessionCookie(res);
-      return res.redirect("/");
-    }
-    req.user = result.payload;
-    return next();
-  } catch {
+function rejectAuth(res, mode, reason) {
+  if (mode === "page") {
     clearSessionCookie(res);
     return res.redirect("/");
   }
+  return res.status(401).json({
+    success: false,
+    message:
+      reason === "MISSING"
+        ? "인증 토큰이 없습니다."
+        : "유효하지 않은 인증 토큰입니다.",
+  });
 }
 
-async function requireAuth(req, res, next) {
-  try {
-    const jwtSecret = process.env.JWT_ACCESS_SECRET;
-    if (!jwtSecret) {
-      return res.status(500).json({
-        success: false,
-        message: "JWT 설정이 누락되었습니다.",
-      });
-    }
+function requireAuth(mode) {
+  return async (req, res, next) => {
+    try {
+      if (mode === "api" && !process.env.JWT_ACCESS_SECRET) {
+        return res.status(500).json({
+          success: false,
+          message: "JWT 설정이 누락되었습니다.",
+        });
+      }
 
-    const result = await attachValidUser(req);
-    if (!result.ok) {
-      return res.status(401).json({
-        success: false,
-        message:
-          result.reason === "MISSING"
-            ? "인증 토큰이 없습니다."
-            : "유효하지 않은 인증 토큰입니다.",
-      });
+      const result = await attachValidUser(req);
+      if (!result.ok) {
+        return rejectAuth(res, mode, result.reason);
+      }
+      req.user = result.payload;
+      return next();
+    } catch {
+      return rejectAuth(res, mode);
     }
-    req.user = result.payload;
-    return next();
-  } catch {
-    return res.status(401).json({
-      success: false,
-      message: "유효하지 않은 인증 토큰입니다.",
-    });
-  }
+  };
 }
 
 async function revokeRequestSession(req) {
@@ -107,11 +95,9 @@ module.exports = {
   SESSION_COOKIE,
   DEVICE_COOKIE,
   cookieBase,
-  getUsiToken,
-  verifyUsiToken,
   clearSessionCookie,
+  authenticateAccessToken,
   attachValidUser,
-  requireUsiForPage,
   requireAuth,
   revokeRequestSession,
 };

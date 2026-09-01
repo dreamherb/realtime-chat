@@ -7,7 +7,6 @@ const cookieParser = require("cookie-parser");
 const engine = require("ejs");
 const helmet = require("helmet");
 const logger = require("morgan");
-const bodyParser = require("body-parser");
 const homeRouter = require("./home/home.router");
 const authRouter = require("./auth/auth.router");
 const dashboardRouter = require("./dashboard/dashboard.router");
@@ -65,11 +64,10 @@ app.use(
 // // x-powerd-by blocking
 app.disable("x-powered-by");
 
-app.use(express.json({ limit: "5mb" })); // 미설정 시 디폴트 값 0.1mb
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
-app.use(bodyParser.json({ limit: 10000000 })); // 10 mb
 
 app.use("/", homeRouter);
 app.use("/auth", authRouter);
@@ -106,11 +104,6 @@ const server = http.createServer(app);
 (async () => {
   await attachRealtime(server);
 
-  // Kafka producer 백그라운드 워밍 (보관)
-  // require("./infrastructure/kafka/kafka.producer")
-  //   .getProducer({ waitMs: 0 })
-  //   .catch(() => {});
-
   // SQS 클라이언트 워밍 (실패해도 앱은 폴백 푸시로 동작)
   require("./infrastructure/sqs/sqs.client").getSqsClient();
 
@@ -122,7 +115,21 @@ const server = http.createServer(app);
   process.exit(1);
 });
 
-function onError(error) { }
+function onError(error) {
+  if (error.syscall !== "listen") {
+    throw error;
+  }
+  const bind = typeof PORT === "number" ? `Port ${PORT}` : `Pipe ${PORT}`;
+  if (error.code === "EACCES") {
+    console.error(`${bind} requires elevated privileges`);
+    process.exit(1);
+  }
+  if (error.code === "EADDRINUSE") {
+    console.error(`${bind} is already in use`);
+    process.exit(1);
+  }
+  throw error;
+}
 
 function onListening() {
     if (process.env.NODE_ENV === "development") {

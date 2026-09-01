@@ -28,15 +28,6 @@ function encrypt(plain) {
   return encrypted;
 }
 
-function decrypt(encrypted) {
-  const decipher = crypto.createDecipheriv(ENC_ALGO, ENC_KEY, IV);
-
-  let decrypted = decipher.update(encrypted, "base64", "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
-}
-
-// 비밀번호 단방향 해시(bcrypt)
 const BCRYPT_SALT_ROUNDS = 10;
 
 async function hashPassword(password) {
@@ -61,7 +52,6 @@ async function verifyPassword(plainPassword, hashedPassword) {
 
 module.exports = {
   encrypt,
-  decrypt,
   hashPassword,
   verifyPassword,
 };

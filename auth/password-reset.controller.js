@@ -1,16 +1,16 @@
 const crypto = require("crypto");
 const { encrypt, hashPassword } = require("./auth.crypto");
 const authService = require("./auth.service");
-const { signPasswordResetJwt } = require("./password-reset.jwt");
 const {
   PASSWORD_RESET_COOKIE,
   PASSWORD_RESET_COOKIE_PATH,
   OTP_TTL_MINUTES,
   RESET_TOKEN_TTL_MINUTES,
-} = require("./password-reset.constants");
+  signPasswordResetJwt,
+  clearPasswordResetCookie,
+} = require("./password-reset.auth");
 const passwordResetService = require("./password-reset.service");
 const { sendPasswordResetOtp } = require("../infrastructure/mail/mailer");
-const { clearPasswordResetCookie } = require("./password-reset.middleware");
 
 const GENERIC_EMAIL_RESPONSE = {
   success: true,
@@ -21,38 +21,6 @@ function mysqlDateTimeFromNowMinutes(minutes) {
   const d = new Date(Date.now() + minutes * 60 * 1000);
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-function setPasswordResetCookie(res, token) {
-  res.cookie(PASSWORD_RESET_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: RESET_TOKEN_TTL_MINUTES * 60 * 1000,
-    path: PASSWORD_RESET_COOKIE_PATH,
-  });
-}
-
-// GET /auth/forgot
-async function getForgotPage(req, res, next) {
-  try {
-    return res.render("forgot", {
-      reason: req.query.reason || null,
-    });
-  } catch (error) {
-    console.error("ERROR IN GET /auth/forgot : ", error.stack);
-    return next(error);
-  }
-}
-
-// GET /auth/forgot/reset (쿠키+JWT 검증은 미들웨어)
-async function getResetPage(req, res, next) {
-  try {
-    return res.render("forgot-reset");
-  } catch (error) {
-    console.error("ERROR IN GET /auth/forgot/reset : ", error.stack);
-    return next(error);
-  }
 }
 
 // POST /auth/forgot/send-code
@@ -146,7 +114,13 @@ async function postVerifyForgotCode(req, res) {
     }
 
     const token = signPasswordResetJwt({ userId: user.id, jti });
-    setPasswordResetCookie(res, token);
+    res.cookie(PASSWORD_RESET_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: RESET_TOKEN_TTL_MINUTES * 60 * 1000,
+      path: PASSWORD_RESET_COOKIE_PATH,
+    });
 
     return res.status(200).json({
       success: true,
@@ -235,8 +209,6 @@ async function postCompleteReset(req, res) {
 }
 
 module.exports = {
-  getForgotPage,
-  getResetPage,
   postSendForgotCode,
   postVerifyForgotCode,
   postCompleteReset,

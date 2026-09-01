@@ -1,30 +1,24 @@
 const nodemailer = require("nodemailer");
 
-function createTransportSafe() {
-  const host = process.env.SMTP_HOST;
-  if (!host) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port: parseInt(process.env.SMTP_PORT || "587", 10),
-    secure: process.env.SMTP_SECURE === "true",
-    auth:
-      process.env.SMTP_USER && process.env.SMTP_PASS
-        ? {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-          }
-        : undefined,
-  });
-}
-
 /**
  * @param {{ to: string, code: string }} param0
  */
 async function sendPasswordResetOtp({ to, code }) {
-  const transporter = createTransportSafe();
+  const host = process.env.SMTP_HOST;
+  const transporter = host
+    ? nodemailer.createTransport({
+        host,
+        port: parseInt(process.env.SMTP_PORT || "587", 10),
+        secure: process.env.SMTP_SECURE === "true",
+        auth:
+          process.env.SMTP_USER && process.env.SMTP_PASS
+            ? {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+              }
+            : undefined,
+      })
+    : null;
   const from = process.env.SMTP_USER;
 
   if (!transporter) {
@@ -50,6 +44,5 @@ async function sendPasswordResetOtp({ to, code }) {
 }
 
 module.exports = {
-  createTransportSafe,
   sendPasswordResetOtp,
 };

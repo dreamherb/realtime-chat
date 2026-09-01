@@ -1,6 +1,5 @@
 const { SendMessageCommand } = require("@aws-sdk/client-sqs");
-const { getSqsClient } = require("./sqs.client");
-const { getSqsQueueUrl, isSqsEnabled } = require("./sqs.config");
+const { getSqsClient, getSqsQueueUrl, isSqsEnabled } = require("./sqs.client");
 
 /**
  * 채팅 메시지 생성 이벤트 발행 (SQS).

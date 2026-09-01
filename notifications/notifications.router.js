@@ -1,37 +1,41 @@
 const express = require("express");
 const router = express.Router();
-const { requireUsiForPage, requireAuth } = require("../auth/auth.middleware");
+const { requireAuth } = require("../auth/auth.middleware");
 const notificationsController = require("./notifications.controller");
 
-router.get("/notifications", requireUsiForPage, notificationsController.getNotificationsPage);
+router.get(
+  "/notifications",
+  requireAuth("page"),
+  notificationsController.getNotificationsPage,
+);
 
 router.get(
   "/api/push/vapid-public-key",
-  requireAuth,
+  requireAuth("api"),
   notificationsController.getVapidPublicKey,
 );
 
 router.get(
   "/api/push/status",
-  requireAuth,
+  requireAuth("api"),
   notificationsController.getStatus,
 );
 
 router.post(
   "/api/push/preference",
-  requireAuth,
+  requireAuth("api"),
   notificationsController.postPreference,
 );
 
 router.post(
   "/api/push/subscribe",
-  requireAuth,
+  requireAuth("api"),
   notificationsController.postSubscribe,
 );
 
 router.delete(
   "/api/push/subscribe",
-  requireAuth,
+  requireAuth("api"),
   notificationsController.deleteSubscribe,
 );
 

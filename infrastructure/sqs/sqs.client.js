@@ -1,9 +1,16 @@
 const { SQSClient } = require("@aws-sdk/client-sqs");
-const {
-  getAwsRegion,
-  getSqsEndpoint,
-  isSqsEnabled,
-} = require("./sqs.config");
+
+function getSqsQueueUrl() {
+  return (process.env.SQS_QUEUE_URL || "").trim();
+}
+
+function getSqsEndpoint() {
+  return (process.env.SQS_ENDPOINT || "").trim() || undefined;
+}
+
+function isSqsEnabled() {
+  return Boolean(getSqsQueueUrl());
+}
 
 let client = null;
 
@@ -13,7 +20,7 @@ function getSqsClient() {
 
   const endpoint = getSqsEndpoint();
   const config = {
-    region: getAwsRegion(),
+    region: process.env.AWS_REGION || "ap-northeast-2",
   };
 
   // 로컬 ElasticMQ 등 custom endpoint
@@ -31,4 +38,6 @@ function getSqsClient() {
 
 module.exports = {
   getSqsClient,
+  getSqsQueueUrl,
+  isSqsEnabled,
 };

@@ -1,22 +1,23 @@
 const express = require("express");
 const router = express.Router();
+const homeController = require("../home/home.controller");
 const authController = require("./auth.controller");
 const passwordResetController = require("./password-reset.controller");
-const passwordResetMiddleware = require("./password-reset.middleware");
+const { requirePasswordResetJwt } = require("./password-reset.auth");
 
-// 뷰 렌더링
-router.get("/login", authController.getLogin);
+router.get("/login", homeController.getRoot);
 router.get("/logout", authController.getLogout);
-router.get("/signup", authController.getSignup);
+router.get("/signup", (req, res) => res.render("signup"));
 
 router.get(
   "/forgot/reset",
-  passwordResetMiddleware.requirePasswordResetJwtForPage,
-  passwordResetController.getResetPage,
+  requirePasswordResetJwt("page"),
+  (req, res) => res.render("forgot-reset"),
 );
-router.get("/forgot", passwordResetController.getForgotPage);
+router.get("/forgot", (req, res) =>
+  res.render("forgot", { reason: req.query.reason || null }),
+);
 
-// API 엔드포인트
 router.post("/login", authController.postLogin);
 router.post("/logout", authController.postLogout);
 router.post("/signup", authController.postSignup);
@@ -25,7 +26,7 @@ router.post("/forgot/send-code", passwordResetController.postSendForgotCode);
 router.post("/forgot/verify-code", passwordResetController.postVerifyForgotCode);
 router.post(
   "/forgot/reset",
-  passwordResetMiddleware.requirePasswordResetJwtForApi,
+  requirePasswordResetJwt("api"),
   passwordResetController.postCompleteReset,
 );
 

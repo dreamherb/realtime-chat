@@ -4,6 +4,7 @@ const {
   SESSION_COOKIE,
   DEVICE_COOKIE,
   cookieBase,
+  clearSessionCookie,
   revokeRequestSession,
 } = require("./auth.middleware");
 const authService = require("./auth.service");
@@ -12,33 +13,6 @@ const {
   createSession,
 } = require("./auth.sessions");
 const { getIo } = require("../chat/chat.realtime");
-
-// GET /auth/login
-async function getLogin(req, res, next) {
-  try {
-    const user = req.user;
-    if (user) {
-      return res.redirect("/dashboard");
-    } else {
-      return res.render("login");
-    }
-  } catch (error) {
-    console.error("ERROR IN GET /auth/login : ", error.stack);
-    res.status(500).send("An error occurred while getting /auth/login");
-    return res.render("error");
-  }
-}
-
-// GET /auth/signup
-async function getSignup(req, res, next) {
-  try {
-    return res.render("signup");
-  } catch (error) {
-    console.error("ERROR IN GET /auth/signup : ", error.stack);
-    res.status(500).send("An error occurred while getting /auth/signup");
-    return res.render("error");
-  }
-}
 
 // POST /auth/login
 async function postLogin(req, res, next) {
@@ -178,7 +152,7 @@ async function getLogout(req, res) {
   } catch (error) {
     console.error("ERROR IN GET /auth/logout : ", error.stack);
   }
-  res.clearCookie(SESSION_COOKIE, { path: "/" });
+  clearSessionCookie(res);
   return res.redirect("/auth/login");
 }
 
@@ -186,7 +160,7 @@ async function getLogout(req, res) {
 async function postLogout(req, res) {
   try {
     await revokeRequestSession(req);
-    res.clearCookie(SESSION_COOKIE, { path: "/" });
+    clearSessionCookie(res);
     return res.status(200).json({
       success: true,
       message: "로그아웃되었습니다.",
@@ -202,8 +176,6 @@ async function postLogout(req, res) {
 }
 
 module.exports = {
-  getLogin,
-  getSignup,
   getLogout,
   postLogin,
   postSignup,

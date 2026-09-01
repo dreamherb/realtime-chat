@@ -940,11 +940,6 @@ jws@^4.0.0, jws@^4.0.1:
     jwa "^2.0.1"
     safe-buffer "^5.0.1"
 
-kafkajs@^2.2.4:
-  version "2.2.4"
-  resolved "https://registry.npmjs.org/kafkajs/-/kafkajs-2.2.4.tgz"
-  integrity sha512-j/YeapB1vfPT2iOIUn/vxdyKEuhuY2PxMBvf5JWux6iSaukAccrMtXEY/Lb7OvavDhOWME589bpLrEdnVHjfjA==
-
 lodash.includes@^4.3.0:
   version "4.3.0"
   resolved "https://registry.npmjs.org/lodash.includes/-/lodash.includes-4.3.0.tgz"

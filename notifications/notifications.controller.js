@@ -1,19 +1,12 @@
-const { resolveSessionUser } = require("../auth/auth.service");
 const notificationsService = require("./notifications.service");
 
 const notificationsController = {
-  async getNotificationsPage(req, res, next) {
+  async getNotificationsPage(req, res) {
     try {
-      const sessionUser = await resolveSessionUser(req);
-      if (!sessionUser) {
-        res.clearCookie("usi", { path: "/" });
-        return res.redirect("/");
-      }
-
       return res.render("notifications", {
         user: {
-          id: sessionUser.id,
-          name: sessionUser.nickname,
+          id: req.user.id,
+          name: req.user.nickname,
         },
         pushConfigured: notificationsService.isPushConfigured(),
       });

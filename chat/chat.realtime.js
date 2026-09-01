@@ -1,9 +1,10 @@
 const { Server } = require("socket.io");
 const { createAdapter } = require("@socket.io/redis-adapter");
 const cookie = require("cookie");
-const jwt = require("jsonwebtoken");
-const { assertSession } = require("../auth/auth.sessions");
-const authService = require("../auth/auth.service");
+const {
+  SESSION_COOKIE,
+  authenticateAccessToken,
+} = require("../auth/auth.middleware");
 const chatService = require("./chat.service");
 const { notifyPushForMessage } = require("./chat.push");
 const {
@@ -11,30 +12,47 @@ const {
   createRedisDuplicate,
 } = require("../infrastructure/redis/redis.client");
 const presence = require("../infrastructure/redis/redis.presence");
-// --- Kafka (보관: 재전환 시 SQS import 대신 사용) ---
-// const {
-//   publishChatMessageCreated,
-// } = require("../infrastructure/kafka/kafka.producer");
-// const { isKafkaEnabled } = require("../infrastructure/kafka/kafka.config");
 const {
   publishChatMessageCreated,
 } = require("../infrastructure/sqs/sqs.producer");
-const { isSqsEnabled } = require("../infrastructure/sqs/sqs.config");
-const { consumeSend } = require("./chat.rate-limit");
+const { isSqsEnabled } = require("../infrastructure/sqs/sqs.client");
 
 const sendRateByUser = new Map();
-const RATE_LIMIT_MESSAGE =
-  "채팅이 너무 빠릅니다. 잠시 후 다시 시도해주세요.";
+const RATE_MAX = 5;
+const RATE_WINDOW_MS = 1000;
+const BAN_MS = 5000;
 
-const ROOM_PREFIX = "room:";
-const USER_PREFIX = "user:";
+// ponytail: 프로세스 메모리. ASG면 Redis(userId)로 옮기면 됨.
+function consumeSend(state, now = Date.now()) {
+  const next = {
+    times: Array.isArray(state?.times) ? state.times.slice() : [],
+    bannedUntil: Number(state?.bannedUntil) || 0,
+  };
+
+  if (now < next.bannedUntil) {
+    return {
+      ok: false,
+      state: next,
+      retryAfterMs: next.bannedUntil - now,
+    };
+  }
+
+  next.times = next.times.filter((t) => now - t < RATE_WINDOW_MS);
+  if (next.times.length >= RATE_MAX) {
+    next.bannedUntil = now + BAN_MS;
+    return { ok: false, state: next, retryAfterMs: BAN_MS };
+  }
+
+  next.times.push(now);
+  return { ok: true, state: next, retryAfterMs: 0 };
+}
 
 function roomChannel(roomId) {
-  return ROOM_PREFIX + roomId;
+  return "room:" + roomId;
 }
 
 function userChannel(userId) {
-  return USER_PREFIX + userId;
+  return "user:" + userId;
 }
 
 async function listOfflineViaSockets(userIds) {
@@ -51,15 +69,6 @@ async function listOfflineViaSockets(userIds) {
 }
 
 async function enqueueOrPushMessage(roomId, senderId, message) {
-  // if (isKafkaEnabled()) {
-  //   const published = await publishChatMessageCreated({
-  //     roomId,
-  //     senderId,
-  //     message,
-  //   });
-  //   if (published.ok) return;
-  // }
-
   if (isSqsEnabled()) {
     const published = await publishChatMessageCreated({
       roomId,
@@ -84,35 +93,15 @@ function getIo() {
 
 async function authenticate(socket, next) {
   try {
-    const cookieHeader = socket.handshake.headers.cookie || "";
-    const cookies = cookie.parse(cookieHeader);
-    const token = cookies.usi;
-
-    if (!token) {
-      return next(new Error("UNAUTHORIZED"));
-    }
-
-    const jwtSecret = process.env.JWT_ACCESS_SECRET;
-    if (!jwtSecret) {
-      return next(new Error("JWT_SECRET_MISSING"));
-    }
-
-    const payload = jwt.verify(token, jwtSecret);
-    const userId = payload?.id;
-    const alive = await assertSession(payload);
-
-    if (!userId || !alive) {
-      return next(new Error("UNAUTHORIZED"));
-    }
-
-    const user = await authService.findUserById(userId);
-    if (!user) {
+    const cookies = cookie.parse(socket.handshake.headers.cookie || "");
+    const result = await authenticateAccessToken(cookies[SESSION_COOKIE]);
+    if (!result.ok || !result.payload?.id) {
       return next(new Error("UNAUTHORIZED"));
     }
 
     socket.data.user = {
-      id: user.id,
-      nickname: user.nickname,
+      id: result.payload.id,
+      nickname: result.payload.nickname,
     };
     return next();
   } catch (error) {
@@ -213,7 +202,7 @@ function bindHandlers(io, socket) {
           return ack?.({
             ok: false,
             code: "RATE_LIMITED",
-            message: RATE_LIMIT_MESSAGE,
+            message: "채팅이 너무 빠릅니다. 잠시 후 다시 시도해주세요.",
             retryAfterMs: rated.retryAfterMs,
           });
         }

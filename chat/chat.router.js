@@ -1,19 +1,23 @@
 const express = require("express");
 const router = express.Router();
-const { requireUsiForPage, requireAuth } = require("../auth/auth.middleware");
+const { requireAuth } = require("../auth/auth.middleware");
 const chatController = require("./chat.controller");
 
-router.get("/chats/new", requireUsiForPage, chatController.getNewChatPage);
-router.get("/groups/new", requireUsiForPage, chatController.getNewGroupPage);
-router.post("/api/rooms", requireAuth, chatController.postCreateRoom);
+router.get("/chats/new", requireAuth("page"), (req, res) =>
+  res.render("chats-new"),
+);
+router.get("/groups/new", requireAuth("page"), (req, res) =>
+  res.render("groups-new"),
+);
+router.post("/api/rooms", requireAuth("api"), chatController.postCreateRoom);
 router.post(
   "/api/rooms/:roomId/join",
-  requireAuth,
+  requireAuth("api"),
   chatController.postJoinRoom,
 );
 router.post(
   "/api/rooms/:roomId/leave",
-  requireAuth,
+  requireAuth("api"),
   chatController.postLeaveRoom,
 );
 

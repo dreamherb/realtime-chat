@@ -1,5 +1,4 @@
 const { encrypt } = require("../auth/auth.crypto");
-const { resolveSessionUser } = require("../auth/auth.service");
 const authService = require("../auth/auth.service");
 const chatService = require("./chat.service");
 const {
@@ -10,34 +9,9 @@ const {
 } = require("./chat.realtime");
 
 const chatController = {
-  async getNewChatPage(req, res) {
-    try {
-      return res.render("chats-new");
-    } catch (error) {
-      console.error("ERROR IN GET /chats/new : ", error.stack);
-      return res.status(500).render("error");
-    }
-  },
-
-  async getNewGroupPage(req, res) {
-    try {
-      return res.render("groups-new");
-    } catch (error) {
-      console.error("ERROR IN GET /groups/new : ", error.stack);
-      return res.status(500).render("error");
-    }
-  },
-
   async postCreateRoom(req, res) {
     try {
-      const sessionUser = await resolveSessionUser(req);
-      if (!sessionUser) {
-        return res.status(401).json({
-          success: false,
-          message: "로그인이 필요합니다.",
-        });
-      }
-
+      const userId = req.user.id;
       const { type, targetEmail, name } = req.body || {};
 
       if (type === chatService.ROOM_TYPE.DM) {
@@ -59,7 +33,7 @@ const chatController = {
         }
 
         const result = await chatService.createDmRoom(
-          sessionUser.id,
+          userId,
           targetUser.id,
         );
 
@@ -93,12 +67,9 @@ const chatController = {
           });
         }
 
-        const result = await chatService.createGroupRoom(
-          sessionUser.id,
-          groupName,
-        );
+        const result = await chatService.createGroupRoom(userId, groupName);
 
-        await notifyGroupCreated(result.roomId, sessionUser.id, groupName);
+        await notifyGroupCreated(result.roomId, userId, groupName);
 
         return res.status(201).json({
           success: true,
@@ -123,14 +94,7 @@ const chatController = {
 
   async postJoinRoom(req, res) {
     try {
-      const sessionUser = await resolveSessionUser(req);
-      if (!sessionUser) {
-        return res.status(401).json({
-          success: false,
-          message: "로그인이 필요합니다.",
-        });
-      }
-
+      const userId = req.user.id;
       const roomId = Number(req.params.roomId);
       if (!Number.isFinite(roomId)) {
         return res.status(400).json({
@@ -139,11 +103,11 @@ const chatController = {
         });
       }
 
-      const result = await chatService.joinGroup(roomId, sessionUser.id);
+      const result = await chatService.joinGroup(roomId, userId);
 
       // 가입 API 응답을 시스템 메시지 INSERT에 묶지 않음 (동시 입장 시 응답 latency 보호)
       if (result.ok && !result.alreadyMember) {
-        notifyRoomMemberJoined(roomId, sessionUser.id);
+        notifyRoomMemberJoined(roomId, userId);
       }
 
       if (!result.ok) {
@@ -184,14 +148,7 @@ const chatController = {
 
   async postLeaveRoom(req, res) {
     try {
-      const sessionUser = await resolveSessionUser(req);
-      if (!sessionUser) {
-        return res.status(401).json({
-          success: false,
-          message: "로그인이 필요합니다.",
-        });
-      }
-
+      const userId = req.user.id;
       const roomId = Number(req.params.roomId);
       if (!Number.isFinite(roomId)) {
         return res.status(400).json({
@@ -200,10 +157,10 @@ const chatController = {
         });
       }
 
-      const result = await chatService.leaveRoom(roomId, sessionUser.id);
+      const result = await chatService.leaveRoom(roomId, userId);
 
       if (result.ok) {
-        notifyRoomMemberLeft(sessionUser.id, roomId, {
+        notifyRoomMemberLeft(userId, roomId, {
           announce: result.roomType !== chatService.ROOM_TYPE.DM,
         });
       }
