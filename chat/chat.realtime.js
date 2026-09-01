@@ -1,10 +1,8 @@
 const { Server } = require("socket.io");
 const { createAdapter } = require("@socket.io/redis-adapter");
 const cookie = require("cookie");
-const {
-  SESSION_COOKIE,
-  authenticateAccessToken,
-} = require("../auth/auth.middleware");
+const { SESSION_COOKIE, authenticateAccessToken } = require("../auth/auth.middleware");
+const { onSessionReplaced } = require("../auth/auth.sessions");
 const chatService = require("./chat.service");
 const { notifyPushForMessage } = require("./chat.push");
 const {
@@ -290,6 +288,9 @@ async function attachRealtime(httpServer) {
   });
 
   ioInstance = io;
+  onSessionReplaced(({ userId, platform }) => {
+    io.to(userChannel(userId)).emit("session:replaced", { platform });
+  });
   return io;
 }
 

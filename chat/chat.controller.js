@@ -8,6 +8,20 @@ const {
   notifyRoomMemberLeft,
 } = require("./chat.realtime");
 
+const ROOM_FAIL = {
+  ROOM_NOT_FOUND: { status: 404, message: "채팅방을 찾을 수 없습니다." },
+  NOT_JOINABLE: { status: 400, message: "참여할 수 없는 채팅방입니다." },
+  NOT_MEMBER: { status: 400, message: "참여 중인 채팅방이 아닙니다." },
+};
+
+function sendRoomFail(res, reason, fallbackMessage) {
+  const mapped = ROOM_FAIL[reason];
+  return res.status(mapped?.status || 400).json({
+    success: false,
+    message: mapped?.message || fallbackMessage,
+  });
+}
+
 const chatController = {
   async postCreateRoom(req, res) {
     try {
@@ -111,22 +125,7 @@ const chatController = {
       }
 
       if (!result.ok) {
-        if (result.reason === "ROOM_NOT_FOUND") {
-          return res.status(404).json({
-            success: false,
-            message: "채팅방을 찾을 수 없습니다.",
-          });
-        }
-        if (result.reason === "NOT_JOINABLE") {
-          return res.status(400).json({
-            success: false,
-            message: "참여할 수 없는 채팅방입니다.",
-          });
-        }
-        return res.status(400).json({
-          success: false,
-          message: "참여에 실패했습니다.",
-        });
+        return sendRoomFail(res, result.reason, "참여에 실패했습니다.");
       }
 
       return res.status(result.alreadyMember ? 200 : 201).json({
@@ -166,22 +165,7 @@ const chatController = {
       }
 
       if (!result.ok) {
-        if (result.reason === "ROOM_NOT_FOUND") {
-          return res.status(404).json({
-            success: false,
-            message: "채팅방을 찾을 수 없습니다.",
-          });
-        }
-        if (result.reason === "NOT_MEMBER") {
-          return res.status(400).json({
-            success: false,
-            message: "참여 중인 채팅방이 아닙니다.",
-          });
-        }
-        return res.status(400).json({
-          success: false,
-          message: "퇴장에 실패했습니다.",
-        });
+        return sendRoomFail(res, result.reason, "퇴장에 실패했습니다.");
       }
 
       return res.status(200).json({

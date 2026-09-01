@@ -7,6 +7,12 @@ const { encrypt } = require("./auth.crypto");
 const SESSION_TTL_MS = 60 * 60 * 1000;
 const DEVICE_COOKIE = "did";
 
+let sessionReplacedListener = null;
+
+function onSessionReplaced(listener) {
+  sessionReplacedListener = listener;
+}
+
 function cacheKey(jti) {
   return `session:jti:${jti}`;
 }
@@ -127,6 +133,10 @@ async function createSession(req, userId) {
     Math.ceil(SESSION_TTL_MS / 1000),
   );
 
+  if (replacedJtis.length) {
+    sessionReplacedListener?.({ userId: Number(userId), platform });
+  }
+
   return {
     jti,
     sessionId,
@@ -207,6 +217,7 @@ module.exports = {
   SESSION_TTL_MS,
   DEVICE_COOKIE,
   createSession,
+  onSessionReplaced,
   assertSession,
   revokeByJti,
   revokeAllForUser,

@@ -1,5 +1,3 @@
-const jwt = require("jsonwebtoken");
-const { encrypt, hashPassword, verifyPassword } = require("./auth.crypto");
 const {
   SESSION_COOKIE,
   DEVICE_COOKIE,
@@ -7,81 +5,46 @@ const {
   clearSessionCookie,
   revokeRequestSession,
 } = require("./auth.middleware");
+const { SESSION_TTL_MS } = require("./auth.sessions");
 const authService = require("./auth.service");
-const {
-  SESSION_TTL_MS,
-  createSession,
-} = require("./auth.sessions");
-const { getIo } = require("../chat/chat.realtime");
 
-// POST /auth/login
-async function postLogin(req, res, next) {
+const LOGIN_FAIL = {
+  MISSING_FIELDS: "이메일과 비밀번호를 입력해주세요.",
+  INVALID_CREDENTIALS: "이메일 또는 비밀번호가 일치하지 않습니다.",
+};
+
+const SIGNUP_FAIL = {
+  MISSING_FIELDS: "닉네임, 이메일, 비밀번호를 모두 입력해주세요.",
+  PASSWORD_MISMATCH: "비밀번호와 비밀번호 확인이 일치하지 않습니다.",
+  EMAIL_TAKEN: "이미 사용 중인 이메일입니다.",
+};
+
+async function postLogin(req, res) {
   try {
-    const { email, password } = req.body;
+    const result = await authService.login({
+      email: req.body?.email,
+      password: req.body?.password,
+      req,
+    });
 
-    if (!email || !password) {
+    if (!result.ok) {
+      if (result.reason === "JWT_MISSING") {
+        return res.status(500).json({
+          success: false,
+          message: "JWT 설정이 누락되었습니다.",
+        });
+      }
       return res.status(400).json({
         success: false,
-        message: "이메일과 비밀번호를 입력해주세요.",
+        message: LOGIN_FAIL[result.reason] || "로그인 처리 중 오류가 발생했습니다.",
       });
     }
 
-    const encryptedEmail = encrypt(email);
-    const user = await authService.findUserByEmail(encryptedEmail);
-
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "이메일 또는 비밀번호가 일치하지 않습니다.",
-      });
-    }
-
-    const isPasswordValid = await verifyPassword(password, user.password);
-
-    if (!isPasswordValid) {
-      return res.status(400).json({
-        success: false,
-        message: "이메일 또는 비밀번호가 일치하지 않습니다.",
-      });
-    }
-
-    const session = await createSession(req, user.id);
-    if (session.replacedJtis.length) {
-      const io = getIo();
-      io?.to(`user:${user.id}`).emit("session:replaced", {
-        platform: session.platform,
-      });
-    }
-
-    const jwtSecret = process.env.JWT_ACCESS_SECRET;
-    if (!jwtSecret) {
-      return res.status(500).json({
-        success: false,
-        message: "JWT 설정이 누락되었습니다.",
-      });
-    }
-
-    const accessToken = jwt.sign(
-      {
-        id: user.id,
-        email: encryptedEmail,
-        nickname: user.nickname,
-        sid: session.sessionId,
-        plat: session.platform,
-      },
-      jwtSecret,
-      {
-        expiresIn: "1h",
-        issuer: "realtime-chat",
-        jwtid: session.jti,
-      },
-    );
-
-    res.cookie(SESSION_COOKIE, accessToken, {
+    res.cookie(SESSION_COOKIE, result.accessToken, {
       ...cookieBase(),
       maxAge: SESSION_TTL_MS,
     });
-    res.cookie(DEVICE_COOKIE, session.deviceId, {
+    res.cookie(DEVICE_COOKIE, result.deviceId, {
       ...cookieBase(),
       maxAge: 365 * 24 * 60 * 60 * 1000,
     });
@@ -89,7 +52,7 @@ async function postLogin(req, res, next) {
     return res.status(200).json({
       success: true,
       message: "로그인되었습니다.",
-      accessToken,
+      accessToken: result.accessToken,
       redirectUrl: "/dashboard",
     });
   } catch (error) {
@@ -101,35 +64,17 @@ async function postLogin(req, res, next) {
   }
 }
 
-// POST /auth/signup
-// - 이메일: 복호화 가능한 양방향 암호화
-// - 비밀번호: bcrypt 단방향 해시
-async function postSignup(req, res, next) {
+async function postSignup(req, res) {
   try {
-    const { nickname, email, password, confirmPassword } = req.body || {};
+    const result = await authService.signup(req.body || {});
 
-    if (!nickname || !email || !password || !confirmPassword) {
+    if (!result.ok) {
       return res.status(400).json({
         success: false,
-        message: "닉네임, 이메일, 비밀번호를 모두 입력해주세요.",
+        message:
+          SIGNUP_FAIL[result.reason] || "회원가입 처리 중 오류가 발생했습니다.",
       });
     }
-
-    if (password !== confirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "비밀번호와 비밀번호 확인이 일치하지 않습니다.",
-      });
-    }
-
-    const encryptedEmail = encrypt(email);
-    const passwordHash = await hashPassword(password);
-
-    await authService.createUser({
-      nickname,
-      encryptedEmail,
-      passwordHash,
-    });
 
     return res.status(201).json({
       success: true,
@@ -145,7 +90,6 @@ async function postSignup(req, res, next) {
   }
 }
 
-// GET /auth/logout
 async function getLogout(req, res) {
   try {
     await revokeRequestSession(req);
@@ -156,7 +100,6 @@ async function getLogout(req, res) {
   return res.redirect("/auth/login");
 }
 
-// POST /auth/logout
 async function postLogout(req, res) {
   try {
     await revokeRequestSession(req);
