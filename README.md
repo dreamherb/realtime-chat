@@ -24,6 +24,7 @@
 | Queue | Amazon SQS (로컬은 ElasticMQ) |
 | Push / Mail | Web Push, SMTP (Nodemailer) |
 | Infra | Docker, EC2, ECR, ALB, ASG |
+| Test | Jest, supertest |
 | CI/CD | GitHub Actions (OIDC) |
 
 ## 인프라
@@ -47,6 +48,12 @@ Client ──HTTPS──► ALB ──► EC2 (app / worker)
 ```
 realtime-chat/
 ├── app.js                      # Express 부트스트랩, Socket.IO 연결, graceful shutdown
+├── __tests__/
+│   ├── unit/                   # crypto, 세션 플랫폼, 방 미리보기
+│   └── integration/            # /health, 회원가입·로그인 (supertest)
+├── jest.config.js
+├── jest.integration.config.js
+├── jest.setup.js
 ├── auth/                       # 회원가입·로그인·세션·비밀번호 재설정
 │   ├── auth.router.js
 │   ├── auth.controller.js
@@ -150,6 +157,18 @@ yarn local:down
 ```
 
 환경 변수는 `.env.development` / `.env.production`을 사용한다. (`.env.*`는 git에 포함하지 않는다.)
+
+## 테스트
+
+Jest를 쓴다. 단위 테스트는 DB 없이 돌리고, 통합 테스트는 로컬 MySQL과 `.env.development`가 필요하다.
+
+```bash
+yarn test            # 단위 (__tests__/unit)
+yarn test:int        # 통합 (__tests__/integration)
+yarn test:coverage   # 통합 + coverage
+```
+
+통합 테스트는 고유 이메일로 가입·로그인 후 해당 유저만 삭제한다. `app.js`는 직접 실행할 때만 listen하므로, 테스트에서 require해도 포트를 열지 않는다.
 
 ## 배포
 
