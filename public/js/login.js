@@ -1,4 +1,4 @@
-const signInBtn = document.getElementById("signInBtn");
+const loginForm = document.querySelector(".card--auth form");
 
 function signIn() {
   const isEmailValid = checkEmailValid();
@@ -38,4 +38,7 @@ function signIn() {
   });
 }
 
-signInBtn.addEventListener("click", signIn);
+loginForm.addEventListener("submit", function (e) {
+  e.preventDefault();
+  signIn();
+});
