@@ -6,6 +6,7 @@
   "scripts": {
     "test": "jest",
     "test:int": "env-cmd -f .env.development jest --config jest.integration.config.js",
+    "test:coverage": "env-cmd -f .env.development jest --config jest.integration.config.js --coverage",
     "dev": "env-cmd -f .env.development nodemon app.js",
     "worker:chat": "env-cmd -f .env.development node workers/chat-message.worker.js",
     "local:up": "docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build",
