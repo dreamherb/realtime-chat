@@ -4,6 +4,9 @@
 
 - 사이트: [https://dream-herb.com](https://dream-herb.com)
 
+## Infra Structure
+<img width="1100" height="618" alt="Image" src="https://github.com/user-attachments/assets/f31811aa-d53e-47ee-81d1-ed022384ffe3" />
+
 ## 주요 특징
 
 - 이메일 회원가입, 비밀번호 찾기 시 이메일 인증
@@ -12,6 +15,9 @@
 - PC 알림 On 시 새 메시지 Web Push
 - 짧은 시간에 메시지를 반복 입력하면 5초 입력 제한
 - 발송 중 네트워크가 끊겨도 IndexedDB에 보관하고, 재연결 시 재발송
+
+## ERD
+<img width="1058" height="739" alt="Image" src="https://github.com/user-attachments/assets/329f8e59-a109-4cae-8b89-4153f08501ba" />
 
 ## 기술 스택
 
